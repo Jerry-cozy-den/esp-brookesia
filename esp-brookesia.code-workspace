@@ -1,0 +1,153 @@
+{
+    "folders": [
+        {
+            "name": "项目根目录",
+            "path": "."
+        },
+        {
+            "name": "S3 LCD 开发板",
+            "path": "./products/phone/phone_s3_lcd_ev_board"
+        },
+        {
+            "name": "S3 Box 3",
+            "path": "./products/phone/phone_s3_box_3"
+        },
+        {
+            "name": "M5Stack Core S3",
+            "path": "./products/phone/phone_m5stack_core_s3"
+        },
+        {
+            "name": "P4 Function 开发板",
+            "path": "./products/phone/phone_p4_function_ev_board"
+        },
+        {
+            "name": "Speaker",
+            "path": "./products/speaker"
+        }
+    ],
+    "settings": {
+        // 全局设置
+        "files.associations": {
+            "*.c": "c",
+            "*.h": "c",
+            "*.cpp": "cpp",
+            "*.hpp": "cpp",
+            "*.ino": "cpp",
+            "CMakeLists.txt": "cmake",
+            "*.cmake": "cmake",
+            "sdkconfig": "properties",
+            "*.conf": "properties"
+        },
+        
+        // 文件排除设置（提高性能）
+        "files.exclude": {
+            "**/build/**": true,
+            "**/managed_components/**": true,
+            "**/.git/**": true,
+            "**/.DS_Store": true,
+            "**/Thumbs.db": true
+        },
+        
+        // 搜索排除设置
+        "search.exclude": {
+            "**/build/**": true,
+            "**/managed_components/**": true,
+            "**/.git/**": true
+        },
+        
+        // ESP-IDF 相关设置
+        "idf.saveBeforeBuild": true,
+        "idf.buildDirectoryName": "build",
+        
+        // C/C++ 智能感知设置
+        "C_Cpp.intelliSenseEngine": "disabled",
+        "clangd.detectExtensionConflicts": false,
+        
+        // 编辑器设置
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false,
+        "editor.rulers": [100],
+        
+        // 终端设置
+        "terminal.integrated.defaultProfile.windows": "PowerShell"
+    },
+    "extensions": {
+        "recommendations": [
+            "espressif.esp-idf-extension",
+            "llvm-vs-code-extensions.vscode-clangd",
+            "ms-vscode.cmake-tools",
+            "twxs.cmake",
+            "ms-vscode.hexeditor",
+            "formulahendry.code-runner",
+            "gruntfuggly.todo-tree"
+        ]
+    },
+    
+    "tasks": {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "label": "构建所有板子",
+                "dependsOrder": "sequence",
+                "dependsOn": [
+                    "构建 S3 LCD",
+                    "构建 S3 Box 3", 
+                    "构建 M5Stack Core S3",
+                    "构建 P4 Function",
+                    "构建 Speaker"
+                ]
+            },
+            {
+                "label": "构建 S3 LCD",
+                "type": "shell",
+                "command": "idf.py",
+                "args": ["build"],
+                "options": {
+                    "cwd": "${workspaceFolder:S3 LCD 开发板}"
+                },
+                "group": "build"
+            },
+            {
+                "label": "构建 S3 Box 3",
+                "type": "shell", 
+                "command": "idf.py",
+                "args": ["build"],
+                "options": {
+                    "cwd": "${workspaceFolder:S3 Box 3}"
+                },
+                "group": "build"
+            },
+            {
+                "label": "构建 M5Stack Core S3",
+                "type": "shell",
+                "command": "idf.py", 
+                "args": ["build"],
+                "options": {
+                    "cwd": "${workspaceFolder:M5Stack Core S3}"
+                },
+                "group": "build"
+            },
+            {
+                "label": "构建 P4 Function",
+                "type": "shell",
+                "command": "idf.py",
+                "args": ["build"], 
+                "options": {
+                    "cwd": "${workspaceFolder:P4 Function 开发板}"
+                },
+                "group": "build"
+            },
+            {
+                "label": "构建 Speaker",
+                "type": "shell",
+                "command": "idf.py",
+                "args": ["build"],
+                "options": {
+                    "cwd": "${workspaceFolder:Speaker}"
+                },
+                "group": "build"
+            }
+        ]
+    }
+}

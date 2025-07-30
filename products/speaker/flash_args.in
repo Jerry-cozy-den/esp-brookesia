@@ -1,0 +1,10 @@
+--flash_mode dio --flash_freq 80m --flash_size 16MB
+0x0 bootloader/bootloader.bin
+0xb0000 $<TARGET_PROPERTY:__idf_build_target,EXECUTABLE_NAME>.bin
+0x8000 partition_table/partition-table.bin
+0xd000 ota_data_initial.bin
+0x10000 srmodels/srmodels.bin
+0xa79000 mmap_build/boot/anim_boot.bin
+0x81c000 mmap_build/emotion/anim_emotion.bin
+0x961000 mmap_build/icon/anim_icon.bin
+0x786000 spiffs_data.bin
