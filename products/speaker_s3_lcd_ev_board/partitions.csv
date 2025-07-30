@@ -1,0 +1,9 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+# Note: if you have increased the bootloader size, make sure to update the offsets to avoid overlap
+# ESP32-S3 LCD EV Board 分区表 - 优化用于多应用支持
+# factory分区增加到8MB以支持多个应用
+# storage分区6MB用于用户数据存储
+nvs,      data, nvs,     ,         0x6000,
+phy_init, data, phy,     ,         0x1000,
+factory,  app,  factory, ,         8M,
+storage,  data, fat,     ,         6M,
