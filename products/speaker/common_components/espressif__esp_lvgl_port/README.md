@@ -1,20 +1,20 @@
-# LVGL ESP Portation
+# LVGL ESP 移植组件
 
 [![Component Registry](https://components.espressif.com/components/espressif/esp_lvgl_port/badge.svg)](https://components.espressif.com/components/espressif/esp_lvgl_port)
 ![maintenance-status](https://img.shields.io/badge/maintenance-actively--developed-brightgreen.svg)
 
-This component helps with using LVGL with Espressif's LCD and touch drivers. It can be used with any project with LCD display.
+这个组件帮助在ESP设备上使用LVGL图形库配合乐鑫的LCD和触摸驱动程序。它可以用于任何带有LCD显示屏的项目。
 
-## Features
-* Initialization of the LVGL
-    * Create task and timer
-    * Handle rotating
-    * Power saving
-* Add/remove display (using [`esp_lcd`](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/lcd.html))
-* Add/remove touch input (using [`esp_lcd_touch`](https://github.com/espressif/esp-bsp/tree/master/components/lcd_touch))
-* Add/remove navigation buttons input (using [`button`](https://github.com/espressif/esp-iot-solution/tree/master/components/button))
-* Add/remove encoder input (using [`knob`](https://github.com/espressif/esp-iot-solution/tree/master/components/knob))
-* Add/remove USB HID mouse/keyboard input (using [`usb_host_hid`](https://components.espressif.com/components/espressif/usb_host_hid))
+## 特性
+* LVGL初始化
+    * 创建任务和定时器
+    * 处理屏幕旋转
+    * 电源管理
+* 添加/移除显示屏 (使用 [`esp_lcd`](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/lcd.html))
+* 添加/移除触摸输入 (使用 [`esp_lcd_touch`](https://github.com/espressif/esp-bsp/tree/master/components/lcd_touch))
+* 添加/移除导航按钮输入 (使用 [`button`](https://github.com/espressif/esp-iot-solution/tree/master/components/button))
+* 添加/移除编码器输入 (使用 [`knob`](https://github.com/espressif/esp-iot-solution/tree/master/components/knob))
+* 添加/移除USB HID鼠标/键盘输入 (使用 [`usb_host_hid`](https://components.espressif.com/components/espressif/usb_host_hid))
 
 ## LVGL Version
 
@@ -38,9 +38,9 @@ This component is fully compatible with LVGL version 9. All types and functions 
     esp_err_t err = lvgl_port_init(&lvgl_cfg);
 ```
 
-### Add screen
+### 添加屏幕
 
-Add an LCD screen to the LVGL. It can be called multiple times for adding multiple LCD screens.
+向LVGL添加LCD屏幕。可以多次调用此函数来添加多个LCD屏幕。
 
 ``` c
     static lv_disp_t * disp_handle;
@@ -49,11 +49,11 @@ Add an LCD screen to the LVGL. It can be called multiple times for adding multip
 	esp_lcd_panel_io_handle_t io_handle = NULL;
 	ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t) 1, &io_config, &io_handle));
 
-    /* LCD driver initialization */
+    /* LCD 驱动初始化 */
     esp_lcd_panel_handle_t lcd_panel_handle;
     ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io_handle, &panel_config, &lcd_panel_handle));
 
-    /* Add LCD screen */
+    /* 添加LCD屏幕 */
     const lvgl_port_display_cfg_t disp_cfg = {
         .io_handle = io_handle,
         .panel_handle = lcd_panel_handle,
@@ -76,7 +76,7 @@ Add an LCD screen to the LVGL. It can be called multiple times for adding multip
     };
     disp_handle = lvgl_port_add_disp(&disp_cfg);
 
-    /* ... the rest of the initialization ... */
+    /* ... 其余初始化代码 ... */
 
     /* If deinitializing LVGL port, remember to delete all displays: */
     lvgl_port_remove_disp(disp_handle);

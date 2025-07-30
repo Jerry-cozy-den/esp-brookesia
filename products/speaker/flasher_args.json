@@ -1,0 +1,36 @@
+{
+    "write_flash_args" : [ "--flash_mode", "dio",
+                           "--flash_size", "16MB",
+                           "--flash_freq", "80m" ],
+    "flash_settings" : {
+        "flash_mode": "dio",
+        "flash_size": "16MB",
+        "flash_freq": "80m"
+    },
+    "flash_files" : {
+        "0x0" : "bootloader/bootloader.bin",
+        "0xb0000" : "brookesia_speaker.bin",
+        "0x8000" : "partition_table/partition-table.bin",
+        "0xd000" : "ota_data_initial.bin",
+        "0x10000" : "srmodels/srmodels.bin",
+        "0xa79000" : "mmap_build/boot/anim_boot.bin",
+        "0x81c000" : "mmap_build/emotion/anim_emotion.bin",
+        "0x961000" : "mmap_build/icon/anim_icon.bin",
+        "0x786000" : "spiffs_data.bin"
+    },
+    "bootloader" : { "offset" : "0x0", "file" : "bootloader/bootloader.bin", "encrypted" : "false" },
+    "app" : { "offset" : "0xb0000", "file" : "brookesia_speaker.bin", "encrypted" : "false" },
+    "partition-table" : { "offset" : "0x8000", "file" : "partition_table/partition-table.bin", "encrypted" : "false" },
+    "otadata" : { "offset" : "0xd000", "file" : "ota_data_initial.bin", "encrypted" : "false" },
+    "model" : { "offset" : "0x10000", "file" : "srmodels/srmodels.bin", "encrypted" : "false" },
+    "anim_boot" : { "offset" : "0xa79000", "file" : "mmap_build/boot/anim_boot.bin", "encrypted" : "false" },
+    "anim_emotion" : { "offset" : "0x81c000", "file" : "mmap_build/emotion/anim_emotion.bin", "encrypted" : "false" },
+    "anim_icon" : { "offset" : "0x961000", "file" : "mmap_build/icon/anim_icon.bin", "encrypted" : "false" },
+    "spiffs_data" : { "offset" : "0x786000", "file" : "spiffs_data.bin", "encrypted" : "false" },
+    "extra_esptool_args" : {
+        "after"  : "hard_reset",
+        "before" : "default_reset",
+        "stub"   : true,
+        "chip"   : "esp32s3"
+    }
+}
