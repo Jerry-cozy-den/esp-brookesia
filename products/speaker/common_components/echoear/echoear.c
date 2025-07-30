@@ -1,21 +1,3 @@
-/*
- * SPDX-FileCopyrightText: 2022-2025 Espressif Syststatic const char *TAG = "BSP";  /*!< 日志标签 */
-
-/* 全局变量定义 - 系统状态管理 */
-static lv_disp_t *disp;                          /*!< LVGL显示对象指针 */
-static lv_indev_t *disp_indev = NULL;            /*!< LVGL输入设备对象指针（触控） */
-static esp_lcd_touch_handle_t tp;                /*!< LCD触控设备句柄 */
-static esp_lcd_panel_handle_t panel_handle = NULL; /*!< LCD面板设备句柄 */
-static bsp_pcd_diff_info_t pcd_info = {};        /*!< PCB版本差异信息缓存 */
-static bool pcd_info_initialized = false;       /*!< PCB版本信息是否已初始化标志 */
-
-static i2c_master_bus_handle_t i2c_handle = NULL; /*!< I2C主机总线句柄 */
-static sdmmc_card_t *bsp_sdcard = NULL;          /*!< SD卡设备句柄（全局） */
-static bool i2c_initialized = false;            /*!< I2C总线是否已初始化标志 */i) CO LTD
- *
- * SPDX-License-Identifier: Apache-2.0
- */
-
 /**
  * @file echoear.c
  * @brief ESP-Brookesia EchoEar 智能音箱板级支持包 (BSP) 实现文件
@@ -65,17 +47,17 @@ static bool i2c_initialized = false;            /*!< I2C总线是否已初始化
 /* 系统配置定义 */
 #define GPIO_WAKEUP_LEVEL       0    /*!< GPIO唤醒电平：低电平唤醒 */
 
-static const char *TAG = "BSP";  /*!< 日志标签 */
+static const char *TAG = "BSP";
+/* 全局变量定义 - 系统状态管理 */
+static lv_disp_t *disp;                          /*!< LVGL显示对象指针 */
+static lv_indev_t *disp_indev = NULL;            /*!< LVGL输入设备对象指针（触控） */
+static esp_lcd_touch_handle_t tp;                /*!< LCD触控设备句柄 */
+static esp_lcd_panel_handle_t panel_handle = NULL; /*!< LCD面板设备句柄 */
+static bsp_pcd_diff_info_t pcd_info = {};        /*!< PCB版本差异信息缓存 */
+static bool pcd_info_initialized = false;       /*!< PCB版本信息是否已初始化标志 */
 
-static lv_disp_t *disp;
-static lv_indev_t *disp_indev = NULL;
-static esp_lcd_touch_handle_t tp;   // LCD touch handle
-static esp_lcd_panel_handle_t panel_handle = NULL;
-static bsp_pcd_diff_info_t pcd_info = {};
-static bool pcd_info_initialized = false;
-
-static i2c_master_bus_handle_t i2c_handle = NULL;
-static sdmmc_card_t *bsp_sdcard = NULL;    // Global uSD card handler
+static i2c_master_bus_handle_t i2c_handle = NULL; /*!< I2C主机总线句柄 */
+static sdmmc_card_t *bsp_sdcard = NULL;          /*!< SD卡设备句柄（全局） */
 static bool i2c_initialized = false;            /*!< I2C总线是否已初始化标志 */
 
 /**
