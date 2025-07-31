@@ -7,6 +7,10 @@
 
 #include "esp_brookesia_internal.h"
 
+// ESP Brookesia 系统内部头文件
+// 主要功能：定义各个系统模块的调试日志开关配置宏
+// 支持通过 menuconfig 配置或直接宏定义来控制日志输出级别
+
 #if !ESP_BROOKESIA_ENABLE_SYSTEMS
 #   error "Systems is not enabled, please enable it in the menuconfig"
 #endif

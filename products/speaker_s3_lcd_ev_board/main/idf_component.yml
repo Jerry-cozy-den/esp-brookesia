@@ -4,12 +4,12 @@ dependencies:
 
   brookesia_core:
     version: "*"
-    override_path: "../../../../core/brookesia_core"
+    override_path: "../../../core/brookesia_core"
 
   brookesia_app_squareline_demo:
     version: "*"
-    override_path: "../../../../apps/brookesia_app_squareline_demo"
+    override_path: "../../../apps/brookesia_app_squareline_demo"
     
   brookesia_app_game_2048_phone:
     version: "*"
-    override_path: "../../../../apps/brookesia_app_game_2048_phone"
+    override_path: "../../../apps/brookesia_app_game_2048_phone"
