@@ -2,14 +2,28 @@
 dependencies:
   espressif/esp32_s3_lcd_ev_board: "4.0.*"
 
+  espressif/esp_tinyusb: "^1.2"
+
+  espressif/gmf_core:
+    override_path: "../common_components/espressif__gmf_core"
+
+  espressif/gmf_ai_audio:
+    override_path: "../common_components/espressif__gmf_ai_audio"
+
   brookesia_core:
-    version: "*"
     override_path: "../../../core/brookesia_core"
 
-  brookesia_app_squareline_demo:
-    version: "*"
-    override_path: "../../../apps/brookesia_app_squareline_demo"
-    
-  brookesia_app_game_2048_phone:
-    version: "*"
-    override_path: "../../../apps/brookesia_app_game_2048_phone"
+  brookesia_app_settings:
+    override_path: "../../../apps/brookesia_app_settings"
+
+  brookesia_app_ai_profile:
+    override_path: "../../../apps/brookesia_app_ai_profile"
+
+  brookesia_app_game_2048:
+    override_path: "../../../apps/brookesia_app_game_2048"
+
+  brookesia_app_calculator:
+    override_path: "../../../apps/brookesia_app_calculator"
+
+  brookesia_app_timer:
+    override_path: "../../../apps/brookesia_app_timer"

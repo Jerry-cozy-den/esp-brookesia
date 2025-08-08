@@ -5,6 +5,9 @@ dependencies:
 
   espressif/esp_tinyusb: "^1.2"
 
+  # ESP32 Camera component for image/video capture
+  espressif/esp32-camera: "^2.0.11"
+
   echoear:
     override_path: "../common_components/echoear"
 

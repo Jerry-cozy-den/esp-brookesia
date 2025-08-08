@@ -1,9 +1,19 @@
-# Name,   Type, SubType, Offset,  Size, Flags
+# Name,       Type, SubType, Offset,  Size,     Flags
 # Note: if you have increased the bootloader size, make sure to update the offsets to avoid overlap
-# ESP32-S3 LCD EV Board 分区表 - 优化用于多应用支持
-# factory分区增加到8MB以支持多个应用
-# storage分区6MB用于用户数据存储
-nvs,      data, nvs,     ,         0x6000,
-phy_init, data, phy,     ,         0x1000,
-factory,  app,  factory, ,         8M,
-storage,  data, fat,     ,         6M,
+# ESP32-S3 LCD EV Board 分区表 - 支持ESP-Brookesia智能音箱功能
+# 减少factory分区，为动画分区腾出空间
+# AI模型数据分区
+# SPIFFS数据分区
+# 表情动画资源分区
+# 图标动画资源分区  
+# 启动动画资源分区
+# 减少storage分区，总计仍有足够空间
+nvs,          data, nvs,     ,        0x6000,
+phy_init,     data, phy,     ,        0x1000,
+factory,      app,  factory, ,        7000K,    
+model,        data, spiffs,  ,        600K,     
+spiffs_data,  data, spiffs,  ,        600K,     
+anim_emotion, data, spiffs,  ,        1300K,    
+anim_icon,    data, spiffs,  ,        1120K,    
+anim_boot,    data, spiffs,  ,        640K,     
+storage,      data, fat,     ,        4M,       

@@ -20,10 +20,13 @@
 #include "esp_chip_info.h"
 #include "esp_flash.h"
 #include "esp_system.h"
+#include "services/storage_nvs/esp_brookesia_service_storage_nvs.hpp"
 #include "app_sntp.h"
 #include "private/esp_brookesia_app_settings_utils.hpp"
 #include "assets/esp_brookesia_app_settings_assets.h"
 #include "esp_brookesia_app_settings_manager.hpp"
+
+using StorageNVS = esp_brookesia::services::StorageNVS;
 
 #define WLAN_OPERATION_THREAD_NAME              "wlan_operation"
 #define WLAN_OPERATION_THREAD_STACK_SIZE        (6 * 1024)

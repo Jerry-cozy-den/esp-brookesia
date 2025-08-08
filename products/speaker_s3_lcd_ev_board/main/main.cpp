@@ -1,301 +1,424 @@
-/* 
- * ESP-Brookesia 智能音箱主程序
- * 这是一个基于ESP32-S3的AI智能音箱，支持语音交互、应用管理、动画表情等功能
- * 
- * 系统架构说明：
- * 1. 硬件层：ESP32-S3芯片 + LCD显示屏 + 音频编解码器 + SD卡存储
- * 2. 驱动层：BSP板级支持包、LVGL图形库、音频驱动
- * 3. 服务层：NVS存储服务、Wi-Fi网络服务、USB开发者模式
- * 4. 应用层：设置管理、游戏应用、计算器、定时器等
- * 5. AI层：Coze平台集成、语音识别、语音合成、智能对话
- * 
- * 主要特性：
- * - 语音AI助手 (通过Coze平台实现智能对话)
- * - 可视化UI界面 (基于LVGL轻量级图形库)
- * - 多种内置应用 (设置、计算器、2048游戏、定时器等)
- * - 动画表情系统 (支持机器人表情动画显示)
- * - SD卡支持 (用于存储配置文件和媒体资源)
- * - USB开发者模式 (用于调试和配置文件管理)
- * 
- * 程序执行流程：
- * 1. 初始化显示系统和动画引擎
- * 2. 挂载SD卡存储
- * 3. 检查是否进入开发者模式
- * 4. 初始化音频系统
- * 5. 启动系统服务(NVS存储等)
- * 6. 加载AI代理配置
- * 7. 创建音箱实例并安装所有应用
- * 8. 注册AI函数调用接口
- * 9. 进入主循环处理用户交互
+/*
+ * SPDX-FileCopyrightText: 2023-2025 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: CC0-1.0
  */
-// ==================== FreeRTOS 实时操作系统相关头文件 ====================
-#include "freertos/FreeRTOS.h"         // FreeRTOS实时操作系统
-#include "freertos/task.h"             // FreeRTOS任务管理
-#include "esp_check.h"                 // ESP错误检查宏
-#include "esp_log.h"                   // ESP日志系统
+
+#include "freertos/FreeRTOS.h"    // FreeRTOS实时操作系统核心头文件
+#include "freertos/task.h"        // 任务管理：创建、删除、挂起、恢复任务
+#include "freertos/semphr.h"      // 信号量：用于任务同步和资源保护
+#include "esp_check.h"            // ESP错误检查宏：提供统一的错误处理机制
+#include "esp_log.h"              // ESP日志系统：分级日志输出(ERROR/WARN/INFO/DEBUG)
 #include "esp_event.h"            // ESP事件循环：系统事件分发和处理机制
 #include "esp_spiffs.h"           // SPIFFS文件系统：轻量级文件系统，用于存储配置文件
 
 // ==================== 图形界面和音频相关头文件 ====================
-#include "esp_lvgl_port.h"             // LVGL图形库移植层
-#include "bsp/esp-bsp.h"               // 板级支持包
-#include "bsp/display.h"               // 显示屏驱动
-#include "bsp/touch.h"                 // 触摸屏驱动
-#include "esp_brookesia.hpp"           // ESP-Brookesia手机框架
+#include "lvgl.h"                 // LVGL轻量级图形库：嵌入式GUI解决方案
+#include "boost/thread.hpp"       // Boost线程库：提供跨平台的线程管理功能
+#include "esp_codec_dev.h"        // ESP音频编解码器设备：音频硬件抽象层
 
-#include "esp_brookesia_app_squareline_demo.hpp"  // SquareLine演示应用
-#include "esp_brookesia_app_game_2048_phone.hpp"  // 2048游戏应用 (Phone版本)
-using namespace esp_brookesia::apps;   // 使用esp_brookesia应用命名空间
 
-#define EXAMPLE_SHOW_MEM_INFO             (1)    // 是否显示内存信息的开关
-
-// ==================== 静态函数声明 ====================
-// 这些函数按照系统初始化的顺序排列，每个函数负责初始化特定的子系统
-static bool init_display_and_draw_logic();     // 初始化显示系统和动画绘图逻辑
-
-// ==================== 全局变量定义 ====================
-// 音频设备句柄 - 用于音频播放和录音功能
-static esp_codec_dev_handle_t play_dev = nullptr;  // 音频播放设备句柄(扬声器)
-static esp_codec_dev_handle_t rec_dev = nullptr;   // 音频录音设备句柄(麦克风)
+#include "esp_lvgl_port.h"
+#include "bsp/display.h"
+#include "esp_lcd_touch.h"        // ESP LCD touch驱动（必须在bsp/touch.h之前）
+#include "bsp/touch.h"
+#include "bsp/esp-bsp.h"          // 板级支持包：硬件相关的初始化和配置
+#include "esp_lvgl_port_disp.h"   // LVGL显示端口：连接LVGL和ESP32显示驱动
 
 
 
+#include "esp_brookesia.hpp"      // ESP-Brookesia核心框架：智能音箱主框架
+#include "esp_brookesia_app_settings.hpp"    // 设置应用：系统参数配置界面
+#include "esp_brookesia_app_ai_profile.hpp"  // AI配置应用：AI助手个性化设置
+#include "esp_brookesia_app_game_2048.hpp"   // 2048游戏应用：经典数字游戏
+#include "esp_brookesia_app_calculator.hpp"  // 计算器应用：基础数学运算工具
+#include "esp_brookesia_app_timer.hpp"       // 定时器应用：倒计时和提醒功能
 
-static const char *TAG = "app_main";  // 日志标签
+// ==================== 工具库和自定义组件头文件 ====================
+#include "esp_lib_utils.h"          // ESP工具库：提供常用的工具函数和宏定义
+#include "usb_msc.h"                // USB大容量存储类：实现USB磁盘功能
+#include "audio_sys.h"              // 音频系统：音频处理和管理模块
+#include "coze_agent_config.h"      // Coze AI代理配置：AI助手配置文件解析
+#include "coze_agent_config_default.h"  // Coze AI代理默认配置：内置的默认AI配置
 
-// 时钟更新定时器回调函数声明
-static void on_clock_update_timer_cb(struct _lv_timer_t *t);
+// ==================== Services头文件 ====================
+#include "services/storage_nvs/esp_brookesia_service_storage_nvs.hpp"
 
-// 应用程序主入口函数
-extern "C" void app_main(void)
+// ==================== 命名空间使用声明 ====================
+// 简化代码中的类型引用，避免每次都写完整的命名空间路径
+using namespace esp_brookesia::speaker;        // ESP-Brookesia音箱核心命名空间
+using namespace esp_brookesia::gui;            // ESP-Brookesia GUI组件命名空间  
+using namespace esp_brookesia::speaker_apps;   // ESP-Brookesia音箱应用命名空间
+using StorageNVS = esp_brookesia::services::StorageNVS;   // StorageNVS服务类型别名
+using namespace esp_brookesia::ai_framework;   // ESP-Brookesia AI框架命名空间
+
+//内存信息显示宏定义
+#define EXAMPLE_SHOW_MEM_INFO             (1)
+static const char *TAG = "app_main";
+// ==================== 音频系统参数配置 ====================
+// 定义音量控制的范围和默认值
+constexpr int         PARAM_SOUND_VOLUME_MIN            = 0;   // 最小音量值(静音)
+constexpr int         PARAM_SOUND_VOLUME_MAX            = 100; // 最大音量值
+constexpr int         PARAM_SOUND_VOLUME_DEFAULT        = 70;  // 系统默认音量
+
+// ==================== 显示系统参数配置 ====================
+// 定义屏幕亮度控制的范围和默认值
+constexpr int         PARAM_DISPLAY_BRIGHTNESS_MIN      = 10;  // 最小亮度(10%,防止完全黑屏)
+constexpr int         PARAM_DISPLAY_BRIGHTNESS_MAX      = 100; // 最大亮度(100%)
+constexpr int         PARAM_DISPLAY_BRIGHTNESS_DEFAULT  = 100; // 系统默认亮度
+
+// ==================== AI函数调用 - 应用启动功能配置 ====================
+// 当AI助手识别到"打开XX应用"指令时，这些参数控制应用启动过程
+constexpr const char *FUNCTION_OPEN_APP_THREAD_NAME               = "open_app";     // 应用启动线程名称
+constexpr int         FUNCTION_OPEN_APP_THREAD_STACK_SIZE         = 10 * 1024;     // 线程栈大小(10KB)
+constexpr int         FUNCTION_OPEN_APP_WAIT_SPEAKING_PRE_MS      = 2000;          // 等待AI语音播放前的延时(2秒)
+constexpr int         FUNCTION_OPEN_APP_WAIT_SPEAKING_INTERVAL_MS = 10;            // 检查AI是否还在说话的间隔(10毫秒)
+constexpr int         FUNCTION_OPEN_APP_WAIT_SPEAKING_MAX_MS      = 2000;          // 最长等待AI说完的时间(2秒)
+constexpr bool        FUNCTION_OPEN_APP_THREAD_STACK_CAPS_EXT     = true;          // 是否使用外部PSRAM作为栈
+
+// ==================== AI函数调用 - 音量控制功能配置 ====================
+// 当AI助手识别到"调大音量"、"调小音量"等指令时，这些参数控制音量调节过程
+constexpr const char *FUNCTION_VOLUME_CHANGE_THREAD_NAME           = "volume_change";  // 音量调节线程名称
+constexpr size_t      FUNCTION_VOLUME_CHANGE_THREAD_STACK_SIZE     = 6 * 1024;         // 线程栈大小(6KB)
+constexpr bool        FUNCTION_VOLUME_CHANGE_THREAD_STACK_CAPS_EXT = true;             // 是否使用外部PSRAM作为栈
+constexpr int         FUNCTION_VOLUME_CHANGE_STEP                  = 20;               // 每次音量调节的步长值
+
+// ==================== AI函数调用 - 亮度控制功能配置 ====================
+// 当AI助手识别到"调亮屏幕"、"调暗屏幕"等指令时，这些参数控制亮度调节过程
+constexpr const char *FUNCTION_BRIGHTNESS_CHANGE_THREAD_NAME           = "brightness_change";  // 亮度调节线程名称
+constexpr size_t      FUNCTION_BRIGHTNESS_CHANGE_THREAD_STACK_SIZE     = 6 * 1024;             // 线程栈大小(6KB)
+constexpr bool        FUNCTION_BRIGHTNESS_CHANGE_THREAD_STACK_CAPS_EXT = true;                 // 是否使用外部PSRAM作为栈
+constexpr int         FUNCTION_BRIGHTNESS_CHANGE_STEP                  = 30;                   // 每次亮度调节的步长值
+
+#define LVGL_PORT_INIT_CONFIG() \
+    {                               \
+        .task_priority = 4,       \
+        .task_stack = 10 * 1024,       \
+        .task_affinity = -1,      \
+        .task_max_sleep_ms = 500, \
+        .timer_period_ms = 5,     \
+    }
+
+// ==================== 全局变量声明 ====================
+static esp_codec_dev_handle_t play_dev = nullptr;    // 音频播放设备句柄
+static esp_codec_dev_handle_t rec_dev = nullptr;     // 音频录制设备句柄
+static Speaker *speaker = nullptr;                   // Speaker实例指针
+static int developer_mode_key = 0;                   // 开发者模式按键计数
+
+// ==================== 分区标签定义 ====================
+#define MUSIC_PARTITION_LABEL "music"                 // 音乐分区标签
+#define DEVELOPER_MODE_KEY 10                         // 开发者模式激活所需按键次数
+
+// ==================== 函数前置声明 ====================
+static bool create_speaker_and_install_apps();
+static bool init_services();
+
+// ==================== 显示系统底层绘图函数 ====================
+/**
+ * @brief 线程安全的位图绘制函数
+ * 
+ * 这个函数是显示系统的核心绘图接口，负责将像素数据直接绘制到LCD屏幕上。
+ * 使用互斥锁确保多线程环境下的绘图操作不会冲突。
+ * 主要用于动画播放器直接向屏幕输出帧数据，绕过LVGL的渲染管线。
+ * 
+ * @param disp LVGL显示对象指针，包含显示设备信息
+ * @param x_start 绘制区域的起始X坐标
+ * @param y_start 绘制区域的起始Y坐标  
+ * @param x_end 绘制区域的结束X坐标
+ * @param y_end 绘制区域的结束Y坐标
+ * @param data 像素数据指针，通常是RGB565格式
+ * @return true 绘制成功，false 绘制失败
+ * 
+ * @note 此函数会等待上一帧传输完成，确保数据完整性
+ */
+static bool draw_bitmap_with_lock(lv_display_t *disp, int x_start, int y_start, int x_end, int y_end, const void *data)
 {
-    // ==================== 系统初始化阶段 ====================
-    // 按照依赖关系的顺序初始化各个子系统，使用assert确保每步都成功
+    // ESP_UTILS_LOG_TRACE_GUARD();  // 调试跟踪(通常注释掉以提高性能)
+
+    // 静态互斥锁，确保同一时间只有一个线程进行绘图操作
+    static boost::mutex draw_mutex;
+
+    // 参数有效性检查
+    ESP_UTILS_CHECK_NULL_RETURN(disp, false, "Invalid display object");
+    ESP_UTILS_CHECK_NULL_RETURN(data, false, "Invalid pixel data");
+
+    // 从LVGL显示对象中获取底层的LCD面板句柄
+    auto panel_handle = static_cast<esp_lcd_panel_handle_t>(lv_display_get_user_data(disp));
+    ESP_UTILS_CHECK_NULL_RETURN(panel_handle, false, "Failed to get LCD panel handle");
+
+    // 使用RAII风格的锁保护，确保函数退出时自动释放锁
+    std::lock_guard<boost::mutex> lock(draw_mutex);
+
+    // 获取LVGL的传输信号量，确保显示驱动就绪
+    ESP_UTILS_CHECK_ERROR_RETURN(
+        lvgl_port_disp_take_trans_sem(disp, 0), false,
+        "Failed to take display transmission semaphore"
+    );
     
-    // 第1步：初始化显示系统 - LCD屏幕、LVGL图形库、动画引擎
-    assert(init_display_and_draw_logic()        && "Initialize display and draw logic failed");
-
-
-    ESP_LOGI(TAG, "Display ESP-Brookesia phone demo");  // 输出启动信息
+    // 执行实际的位图绘制操作，将数据传输到LCD控制器
+    ESP_UTILS_CHECK_ERROR_RETURN(
+        esp_lcd_panel_draw_bitmap(panel_handle, x_start, y_start, x_end + 1, y_end + 1, data), 
+        false, "LCD panel draw bitmap operation failed"
+    );
     
-    /**
-     * 为了避免多个任务同时访问LVGL导致的错误，
-     * 在操作LVGL之前应该获取锁。
-     */
-    lvgl_port_lock(0);
+    // 释放传输信号量，允许其他绘图操作继续
+    lvgl_port_disp_give_trans_sem(disp, false);
 
-    /* 创建手机对象 */
-    ESP_Brookesia_Phone *phone = new ESP_Brookesia_Phone(disp);
-
-    assert(phone && "Create phone failed");  // 断言检查创建是否成功
-
-    /* 根据屏幕分辨率选择对应的样式表 */
-    ESP_Brookesia_PhoneStylesheet_t *stylesheet = nullptr;
-    // 判断是否为480x480分辨率
-    if ((BSP_LCD_H_RES == 480) && (BSP_LCD_V_RES == 480)) {
-        stylesheet = new ESP_Brookesia_PhoneStylesheet_t(ESP_BROOKESIA_PHONE_480_480_DARK_STYLESHEET());
-        assert(stylesheet && "Create stylesheet failed");
-    } 
-    // 判断是否为800x480分辨率
-    else if ((BSP_LCD_H_RES == 800) && (BSP_LCD_V_RES == 480)) {
-        stylesheet = new ESP_Brookesia_PhoneStylesheet_t(ESP_BROOKESIA_PHONE_800_480_DARK_STYLESHEET());
-        assert(stylesheet && "Create stylesheet failed");
-    }
-    
-    // 如果成功创建样式表，则添加并激活它
-    if (stylesheet != nullptr) {
-        ESP_LOGI(TAG, "Using stylesheet (%s)", stylesheet->core.name);
-        assert(phone->addStylesheet(stylesheet) && "Add stylesheet failed");       // 添加样式表
-        assert(phone->activateStylesheet(stylesheet) && "Activate stylesheet failed"); // 激活样式表
-        delete stylesheet;  // 释放样式表内存
-    }
-
-    /* 配置手机对象并启动 */
-    // 设置触摸设备
-    assert(phone->setTouchDevice(bsp_display_get_input_dev()) && "Set touch device failed");
-    // 注册LVGL锁定回调函数
-    phone->registerLvLockCallback((ESP_Brookesia_GUI_LockCallback_t)(lvgl_port_lock), 0);
-    // 注册LVGL解锁回调函数
-    phone->registerLvUnlockCallback((ESP_Brookesia_GUI_UnlockCallback_t)(lvgl_port_unlock));
-    // 启动手机系统
-    assert(phone->begin() && "Begin failed");
-    // 可选：显示容器边框（调试用）
-    // assert(phone->getCoreHome().showContainerBorder(), "Show container border failed");
-
-    /* 安装应用程序 */
-    // 创建SquareLine演示应用实例
-    SquarelineDemo *app_squareline = SquarelineDemo::requestInstance();
-    assert(app_squareline && "Create app squareline failed");
-    // 将应用安装到手机系统中
-    assert((phone->installApp(app_squareline) >= 0) && "Install app squareline failed");
-
-    // 创建2048游戏应用实例（Phone版本）
-    Game2048 *app_game2048 = Game2048::requestInstance();
-    assert(app_game2048 && "Create Game2048 app failed");
-    assert((phone->installApp(app_game2048) >= 0) && "Install Game2048 app failed");
-    // 如果有其他应用，可以继续安装
-    // 例如：
-    /*
-    // 创建计算器应用实例（假设存在）
-    CalculatorApp *app_calculator = CalculatorApp::requestInstance();
-    assert(app_calculator && "Create calculator app failed");
-    assert((phone->installApp(app_calculator) >= 0) && "Install calculator app failed");
-
-    // 创建音乐播放器应用实例（假设存在）
-    MusicPlayerApp *app_music = MusicPlayerApp::requestInstance();
-    assert(app_music && "Create music player app failed");
-    assert((phone->installApp(app_music) >= 0) && "Install music player app failed");
-
-    // 创建天气应用实例（假设存在）
-    WeatherApp *app_weather = WeatherApp::requestInstance();
-    assert(app_weather && "Create weather app failed");
-    assert((phone->installApp(app_weather) >= 0) && "Install weather app failed");
-    */
-
-    /* 创建时钟更新定时器 */
-    // 每1000ms更新一次时钟显示
-    assert(lv_timer_create(on_clock_update_timer_cb, 1000, phone) && "Create clock update timer failed");
-
-    /* 释放LVGL锁 */
-    lvgl_port_unlock();
-
-#if EXAMPLE_SHOW_MEM_INFO
-    // 内存信息显示缓冲区（确保缓冲区足够容纳sprintf的内容）
-    char buffer[128];    
-    // 内存统计变量
-    size_t internal_free = 0;    // SRAM可用内存
-    size_t internal_total = 0;   // SRAM总内存
-    size_t external_free = 0;    // PSRAM可用内存
-    size_t external_total = 0;   // PSRAM总内存
-    
-    // 内存监控循环
-    while (1) {
-        // 获取内部SRAM内存信息
-        internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-        internal_total = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
-        // 获取外部PSRAM内存信息
-        external_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
-        external_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
-        
-        // 格式化内存信息字符串
-        sprintf(buffer, "   Biggest /     Free /    Total\n"
-                "\t  SRAM : [%8d / %8d / %8d]\n"
-                "\t PSRAM : [%8d / %8d / %8d]",
-                heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL), internal_free, internal_total,
-                heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM), external_free, external_total);
-        ESP_LOGI(TAG, "%s", buffer);  // 输出内存信息到日志
-
-        /**
-         * `lockLv()` 和 `unlockLv()` 函数用于锁定和解锁LVGL任务。
-         * 它们通过 `registerLvLockCallback()` 和 `registerLvUnlockCallback()` 函数注册。
-         */
-        phone->lockLv();   // 锁定LVGL任务
-        // 更新"最近应用界面"上的内存标签显示（转换为KB单位）
-        if (!phone->getHome().getRecentsScreen()->setMemoryLabel(internal_free / 1024, internal_total / 1024,
-                external_free / 1024, external_total / 1024)) {
-            ESP_LOGE(TAG, "Set memory label failed");  // 设置内存标签失败
-        }
-        phone->unlockLv(); // 解锁LVGL任务
-
-        vTaskDelay(pdMS_TO_TICKS(2000));  // 延时2秒后继续下一次内存检查
-    }
-#endif
+    return true;
 }
-
-// 时钟更新定时器回调函数
-static void on_clock_update_timer_cb(struct _lv_timer_t *t)
+/**
+ * @brief 清除整个显示屏幕
+ * 
+ * 此函数用于将整个LCD屏幕清除为黑色(像素值为0)。
+ * 主要在系统初始化、模式切换或动画播放前使用，确保屏幕内容干净。
+ * 
+ * @param disp LVGL显示对象指针
+ * @return true 清屏成功，false 清屏失败
+ * 
+ * @note 函数会创建一个临时的像素缓冲区，大小为整个屏幕的像素数据
+ *       对于360x360分辨率的RGB565格式屏幕，需要259.2KB的临时内存
+ */
+static bool clear_display(lv_disp_t *disp)
 {
-    time_t now;                         // 当前时间戳
-    struct tm timeinfo;                 // 时间信息结构体
-    ESP_Brookesia_Phone *phone = (ESP_Brookesia_Phone *)t->user_data;  // 从定时器用户数据获取手机对象
+    ESP_UTILS_LOG_TRACE_GUARD();
 
-    time(&now);                         // 获取当前时间戳
-    localtime_r(&now, &timeinfo);       // 将时间戳转换为本地时间结构
+    // 创建全黑的像素缓冲区
+    // BSP_LCD_H_RES * BSP_LCD_V_RES * 2: 宽度 x 高度 x 2字节(RGB565)
+    std::vector<uint8_t> buffer(BSP_LCD_H_RES * BSP_LCD_V_RES * 2, 0);
+    
+    // 使用绘图函数将黑色缓冲区绘制到整个屏幕
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        draw_bitmap_with_lock(disp, 0, 0, BSP_LCD_H_RES, BSP_LCD_V_RES, buffer.data()), 
+        false, "Failed to draw black screen buffer"
+    );
 
-    /* 由于此回调函数从LVGL任务中调用，因此可以安全地操作LVGL */
-    // 更新状态栏上的时钟显示
-    assert(phone->getHome().getStatusBar()->setClock(timeinfo.tm_hour, timeinfo.tm_min) && "Refresh status bar failed");
+    return true;
+}
+/**
+ * @brief 设置媒体音频播放音量
+ * 
+ * 此函数负责调整系统的音频播放音量，同时将设置保存到NVS存储中。
+ * 音量调节会影响所有音频输出，包括AI语音回复、系统提示音等。
+ * 
+ * @param volume 目标音量值(0-100)，会自动限制到有效范围内
+ * @return true 音量设置成功，false 设置失败
+ * 
+ * @note 音量值会被自动限制在PARAM_SOUND_VOLUME_MIN到PARAM_SOUND_VOLUME_MAX范围内
+ */
+static bool set_media_sound_volume(int volume)
+{
+    ESP_UTILS_LOG_TRACE_GUARD();
+
+    // 检查播放设备句柄有效性
+    ESP_UTILS_CHECK_NULL_RETURN(play_dev, false, "Audio play device handle is invalid");
+
+    ESP_UTILS_LOGI("Setting volume to: %d", volume);
+
+    // 将音量值限制在有效范围内
+    volume = std::clamp(volume, PARAM_SOUND_VOLUME_MIN, PARAM_SOUND_VOLUME_MAX);
+    
+    // 设置音频编解码器的输出音量
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        esp_codec_dev_set_out_vol(play_dev, volume) == ESP_CODEC_DEV_OK, false, 
+        "Failed to set audio codec output volume"
+    );
+    
+    // 将音量设置保存到NVS存储，确保重启后设置依然有效
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        StorageNVS::requestInstance().setLocalParam(SETTINGS_NVS_KEY_VOLUME, volume), false,
+        "Failed to save volume setting to NVS storage"
+    );
+
+    return true;
+}
+/**
+ * @brief 获取当前媒体音频播放音量
+ * 
+ * 从NVS存储中读取当前保存的音量设置。
+ * 如果读取失败，返回系统默认音量值。
+ * 
+ * @return 当前音量值(0-100)，读取失败时返回默认值
+ */
+static int get_media_sound_volume()
+{
+    StorageNVS::Value volume;
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        StorageNVS::requestInstance().getLocalParam(SETTINGS_NVS_KEY_VOLUME, volume),
+        PARAM_SOUND_VOLUME_DEFAULT, "Failed to get volume from NVS, using default value"
+    );
+
+    return std::get<int>(volume);
 }
 
 /**
- * @brief 初始化显示系统和绘图逻辑
+ * @brief 设置显示屏背光亮度
  * 
- * 这是显示系统的核心初始化函数，负责：
- * 1. 初始化BSP(板级支持包)和电源管理
- * 2. 配置并启动LVGL图形库和LCD显示驱动
- * 3. 设置动画播放器的事件处理机制
- * 4. 建立虚拟绘制模式的控制机制
+ * 此函数负责调整LCD屏幕的背光亮度，同时将设置保存到NVS存储中。
+ * 亮度调节会直接影响用户体验和设备功耗。
  * 
- * 关键概念说明：
- * - 虚拟绘制模式：允许动画直接绘制到屏幕，暂停LVGL的UI渲染
- * - 双缓冲技术：使用两个显示缓冲区，避免画面撕裂和闪烁
- * - 信号槽机制：使用观察者模式处理动画事件
+ * @param brightness 目标亮度值(10-100)，会自动限制到有效范围内
+ * @return true 亮度设置成功，false 设置失败
  * 
- * @return true 初始化成功，false 初始化失败
+ * @note 亮度最小值为10%，避免屏幕过暗导致无法操作
  */
-// LVGL移植层初始化配置宏
-#define LVGL_PORT_INIT_CONFIG() \
-    {                               \
-
-    }
-static bool init_display_and_draw_logic()
+static bool set_media_display_brightness(int brightness)
 {
-    // 配置显示屏参数
-    bsp_display_cfg_t cfg = {
-        .lvgl_port_cfg = {
-            .task_priority = 4,       /* LVGL任务优先级 */      \
-            .task_stack = 10 * 1024,  /* LVGL任务栈大小(10KB) */ \
-            .task_affinity = -1,      /* CPU亲和性(-1表示任意CPU) */ \
-            .task_max_sleep_ms = 500, /* 任务最大休眠时间(ms) */ \
-            .timer_period_ms = 5,     /* 定时器周期(ms) */ \
-        },
-    };
-    // 启动显示屏并获取显示对象
-    lv_display_t *disp = bsp_display_start_with_config(&cfg);
-
     ESP_UTILS_LOG_TRACE_GUARD();
 
+    ESP_UTILS_LOGI("Setting display brightness to: %d", brightness);
+
+    // 将亮度值限制在有效范围内(10%-100%)
+    brightness = std::clamp(brightness, PARAM_DISPLAY_BRIGHTNESS_MIN, PARAM_DISPLAY_BRIGHTNESS_MAX);
+    
+    // 设置LCD背光亮度
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        bsp_display_brightness_set(brightness) == ESP_OK, false, 
+        "Failed to set LCD display brightness"
+    );
+    
+    // 将亮度设置保存到NVS存储，确保重启后设置依然有效
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        StorageNVS::requestInstance().setLocalParam(SETTINGS_NVS_KEY_BRIGHTNESS, brightness), false,
+        "Failed to save brightness setting to NVS storage"
+    );
+
+    return true;
+}
+
+/**
+ * @brief 获取当前显示屏背光亮度
+ * 
+ * 从NVS存储中读取当前保存的亮度设置。
+ * 如果读取失败，返回系统默认亮度值。
+ * 
+ * @return 当前亮度值(10-100)，读取失败时返回默认值
+ */
+static int get_media_display_brightness()
+{
+    StorageNVS::Value brightness;
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        StorageNVS::requestInstance().getLocalParam(SETTINGS_NVS_KEY_BRIGHTNESS, brightness),
+        PARAM_DISPLAY_BRIGHTNESS_DEFAULT, "Failed to get brightness from NVS, using default value"
+    );
+
+    return std::get<int>(brightness);
+}
+
+/**
+ * @brief 初始化系统服务
+ * 
+ * 此函数负责启动和初始化系统核心服务，主要包括：
+ * 1. 启动NVS(非易失性存储)服务
+ * 2. 从NVS中加载用户设置参数
+ * 3. 应用音量和亮度设置到硬件
+ * 
+ * NVS存储用于保存用户的个性化设置，确保设备重启后
+ * 设置依然保持，提供一致的用户体验。
+ * 
+ * @return true 服务初始化成功，false 初始化失败
+ */
+static bool init_services()
+{
+    ESP_UTILS_LOG_TRACE_GUARD();
+
+    // ==================== NVS存储服务启动 ====================
+    
+    // 启动NVS存储服务，这是所有持久化设置的基础
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        StorageNVS::requestInstance().begin(), false, 
+        "Failed to initialize NVS storage service"
+    );
+
+    // ==================== 系统设置参数初始化 ====================
+    
+    // 初始化音量设置
+    StorageNVS::Value volume = PARAM_SOUND_VOLUME_DEFAULT;
+    if (!StorageNVS::requestInstance().getLocalParam(SETTINGS_NVS_KEY_VOLUME, volume)) {
+        // 如果NVS中没有音量设置，使用默认值并记录警告
+        ESP_UTILS_LOGW("Volume setting not found in NVS, using default value: %d", std::get<int>(volume));
+    }
+    // 应用音量设置到音频硬件
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        set_media_sound_volume(std::get<int>(volume)), false, 
+        "Failed to apply volume setting to audio hardware"
+    );
+    
+    // 初始化显示亮度设置
+    StorageNVS::Value brightness = PARAM_DISPLAY_BRIGHTNESS_DEFAULT;
+    if (!StorageNVS::requestInstance().getLocalParam(SETTINGS_NVS_KEY_BRIGHTNESS, brightness)) {
+        // 如果NVS中没有亮度设置，使用默认值并记录警告
+        ESP_UTILS_LOGW("Brightness setting not found in NVS, using default value: %d", std::get<int>(brightness));
+    }
+    // 应用亮度设置到显示硬件
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        set_media_display_brightness(std::get<int>(brightness)), false, 
+        "Failed to apply brightness setting to display hardware"
+    );
+
+    ESP_UTILS_LOGI("System services initialization completed successfully");
+    return true;
+}
+
+// ==================== 字符串处理工具函数 ====================
+
+/**
+ * @brief 将字符串转换为小写
+ * 
+ * 用于应用名称的标准化处理，确保不区分大小写的应用名称匹配。
+ * 
+ * @param input 输入字符串
+ * @return 转换后的小写字符串
+ */
+static std::string to_lower(const std::string &input)
+{
+    std::string result = input;
+    for (char &c : result) {
+        c = std::tolower(static_cast<unsigned char>(c));
+    }
+    return result;
+}
+
+/**
+ * @brief 获取字符串中第一个空格之前的部分
+ * 
+ * 用于从AI识别的应用名称中提取关键词。
+ * 例如："settings app" -> "settings"
+ * 
+ * @param input 输入字符串
+ * @return 第一个空格之前的子字符串，如果没有空格则返回整个字符串
+ */
+static std::string get_before_space(const std::string &input)
+{
+    size_t pos = input.find(' ');
+    return input.substr(0, pos);
+}
+
+
+
+
+
+
+extern "C" void app_main(void)
+{
+    ESP_UTILS_LOG_TRACE_GUARD();
     // 虚拟绘制模式标志：true=动画直接绘制，false=LVGL正常渲染
     static bool is_lvgl_dummy_draw = true;
 
-    // ==================== BSP 和显示驱动初始化 ====================
-    
-    // 初始化板级电源管理(参数0表示使用默认配置)
-    bsp_power_init(0);
-    
-    // 配置显示系统参数
     bsp_display_cfg_t cfg = {
-        // LVGL任务配置
-        .lvgl_port_cfg = {
-            .task_priority = LVGL_TASK_PRIORITY,        // 任务优先级
-            .task_stack = LVGL_TASK_STACK_SIZE,         // 任务栈大小
-            .task_affinity = LVGL_TASK_CORE_ID,         // 绑定到指定CPU核心
-            .task_max_sleep_ms = LVGL_TASK_MAX_SLEEP_MS, // 任务最大休眠时间
-            .task_stack_caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, // 使用外部PSRAM
-            .timer_period_ms = LVGL_TASK_TIMER_PERIOD_MS, // 定时器周期
-        },
-        // 显示缓冲区配置
-        .buffer_size = BSP_LCD_H_RES * BSP_LCD_V_RES,  // 缓冲区大小=屏幕像素总数
-        .double_buffer = true,                          // 启用双缓冲技术
-        .flags = {
-            .buff_spiram = true,                        // 显示缓冲区使用外部PSRAM
-            // 根据是否处于开发者模式决定是否启用虚拟绘制
-            .default_dummy_draw = (developer_mode_key != DEVELOPER_MODE_KEY), 
-        },
+        .lvgl_port_cfg = LVGL_PORT_INIT_CONFIG()  // 使用预定义的 LVGL 配置
     };
-    
     // 启动显示驱动，返回LVGL显示对象
     auto disp = bsp_display_start_with_config(&cfg);
     ESP_UTILS_CHECK_NULL_RETURN(disp, false, "Failed to start display with configuration");
     
-    // 在非开发者模式下清屏，避免启动时的白屏现象
-    if (developer_mode_key != DEVELOPER_MODE_KEY) {
-        ESP_UTILS_CHECK_FALSE_RETURN(clear_display(disp), false, "Failed to clear display during initialization");
-        vTaskDelay(pdMS_TO_TICKS(100)); // 延时100ms避免雪花屏现象
-    }
-    
     // 打开LCD背光，显示内容变为可见
     bsp_display_backlight_on();
+
+    ESP_LOGI(TAG, "Display ESP-Brookesia lcdspeaker demo");
+    /**
+     * To avoid errors caused by multiple tasks simultaneously accessing LVGL,
+     * should acquire a lock before operating on LVGL.
+     */
 
     // ==================== 动画播放器事件处理 ====================
     // 这部分是实现AI机器人表情动画的核心机制
@@ -305,6 +428,7 @@ static bool init_display_and_draw_logic()
      * 当动画播放器准备好一帧新数据时触发此回调
      * 负责将动画帧数据直接绘制到LCD屏幕上
      */
+    /* 创建手机对象 */
     AnimPlayer::flush_ready_signal.connect(
         [ = ](int x_start, int y_start, int x_end, int y_end, const void *data, void *user_data
     ) {
@@ -324,7 +448,6 @@ static bool init_display_and_draw_logic()
         ESP_UTILS_CHECK_NULL_EXIT(player, "Invalid animation player pointer");
         player->notifyFlushFinished();
     });
-    
     /**
      * 动画停止信号处理
      * 当动画播放结束时触发此回调
@@ -385,6 +508,588 @@ static bool init_display_and_draw_logic()
         // 更新本地的模式标志
         is_lvgl_dummy_draw = enable;
     });
+    // ==================== SD卡错误处理和用户提示 ====================
+    // 切换到UI显示模式，准备显示错误提示界面
+    Display::on_dummy_draw_signal(false);
+    // 获取显示锁，开始创建提示界面
+    bsp_display_lock(0);
+    // 创建错误提示标签
+    auto label = lv_label_create(lv_screen_active());
+    lv_obj_set_size(label, 300, LV_SIZE_CONTENT);                      // 设置标签尺寸
+    lv_obj_set_style_text_font(label, &esp_brookesia_font_maison_neue_book_26, 0); // 设置字体
+    lv_label_set_text(label, "SD card not found, please insert a SD card!");       // 设置提示文本
+    lv_obj_center(label);                                               // 居中显示
+    // 释放显示锁，显示提示界面
+    bsp_display_unlock();
+
+    // SD卡挂载成功，清除错误提示界面
+    bsp_display_lock(0);
+    lv_obj_del(label);        // 删除提示标签
+    bsp_display_unlock();
+
+    // 切换回动画显示模式，准备继续系统初始化
+    Display::on_dummy_draw_signal(true);
+    ESP_UTILS_LOGI("SD card successfully mounted after retry");
+
+    // ==================== 音频外设硬件信息配置 ====================
+    // 配置音频系统的硬件参数，包括I2C、I2S和编解码器设置
+    esp_gmf_setup_periph_hardware_info periph_info = {
+        // I2C配置 - 用于控制音频编解码器芯片
+        .i2c = {
+            .handle = bsp_i2c_get_handle(),    // 获取BSP提供的I2C句柄
+        },
+        // 音频编解码器配置
+        .codec = {
+            .io_pa = BSP_POWER_AMP_IO,    // 功放使能引脚(Power Amplifier Enable)-找找
+            .type = ESP_GMF_CODEC_TYPE_ES7210_IN_ES8311_OUT,  // 编解码器类型组合
+            
+            // DAC配置 - 数字到模拟转换器(用于音频播放)
+            .dac = {
+                .io_mclk = BSP_I2S_MCLK,       // 主时钟引脚
+                .io_bclk = BSP_I2S_SCLK,       // 位时钟引脚
+                .io_ws = BSP_I2S_LCLK,         // 字选择引脚(左右声道切换)
+                .io_do = BSP_I2S_DOUT,         // 数据输出引脚
+                .io_di = BSP_I2S_DSIN,         // 数据输入引脚(PCB版本相关)
+                .sample_rate = 16000,
+                .channel = 2,
+                .bits_per_sample = 32,
+                .port_num  = 0,
+            },
+            .adc = {
+                .io_mclk = BSP_I2S_MCLK,
+                .io_bclk = BSP_I2S_SCLK,
+                .io_ws = BSP_I2S_LCLK,
+                .io_do = BSP_I2S_DOUT,
+                .io_di = BSP_I2S_DSIN,
+                .sample_rate = 16000,
+                .channel = 2,
+                .bits_per_sample = 32,
+                .port_num  = 0,
+            },
+        },
+    };
+    
+    // ==================== 音频管理器初始化 ====================
+    
+    // 初始化音频管理器，创建播放和录音设备句柄
+    ESP_UTILS_CHECK_ERROR_RETURN(
+        audio_manager_init(&periph_info, &play_dev, &rec_dev), false, 
+        "Failed to initialize audio manager and create device handles"
+    );
+    // 启动音频提示系统(用于播放系统提示音)
+    ESP_UTILS_CHECK_ERROR_RETURN(
+        audio_prompt_open(), false, "Failed to open audio prompt system"
+    );
+
+    // ==================== SPIFFS配置分区初始化 ====================
+    
+    // 配置SPIFFS文件系统，用于存储配置文件
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = BSP_SPIFFS_MOUNT_POINT,       // 挂载路径
+        .partition_label = "storage",              // 配置分区标签
+        .max_files = 5,                            // 最大同时打开文件数
+        .format_if_mount_failed = true             // 挂载失败时自动格式化
+    };
+
+    auto ret = esp_vfs_spiffs_register(&conf);
+    if (ret != ESP_OK) {
+        // 根据不同错误类型提供详细的错误信息
+        if (ret == ESP_FAIL) {
+            ESP_UTILS_CHECK_FALSE_RETURN(false, false, "Failed to mount or format SPIFFS filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_UTILS_CHECK_FALSE_RETURN(false, false, "SPIFFS partition not found in partition table");
+        } else {
+            ESP_UTILS_CHECK_FALSE_RETURN(false, false, "Failed to initialize SPIFFS: %s", esp_err_to_name(ret));
+        }
+    }
+
+    // ==================== SPIFFS音乐分区初始化 ====================
+    
+    // 配置SPIFFS文件系统，用于存储和访问音频文件
+    esp_vfs_spiffs_conf_t music_conf = {
+        .base_path = "/spiffs",                    // 挂载路径
+        .partition_label = MUSIC_PARTITION_LABEL,  // 分区标签
+        .max_files = 5,                            // 最大同时打开文件数
+        .format_if_mount_failed = false            // 挂载失败时不自动格式化
+    };
+
+    ret = esp_vfs_spiffs_register(&music_conf);
+    if (ret != ESP_OK) {
+        // 根据不同错误类型提供详细的错误信息
+        if (ret == ESP_FAIL) {
+            ESP_UTILS_CHECK_FALSE_RETURN(false, false, "Failed to mount or format SPIFFS filesystem");
+        } else if (ret == ESP_ERR_NOT_FOUND) {
+            ESP_UTILS_CHECK_FALSE_RETURN(false, false, "SPIFFS partition not found in partition table");
+        } else {
+            ESP_UTILS_CHECK_FALSE_RETURN(false, false, "Failed to initialize SPIFFS: %s", esp_err_to_name(ret));
+        }
+    }
+
+    // 获取并显示SPIFFS分区使用情况
+    size_t total = 0, used = 0;
+    ret = esp_spiffs_info(MUSIC_PARTITION_LABEL, &total, &used);
+    if (ret != ESP_OK) {
+        ESP_UTILS_CHECK_FALSE_RETURN(
+            false, false, "Failed to get SPIFFS partition information: %s", esp_err_to_name(ret)
+        );
+    } else {
+        ESP_UTILS_LOGI("SPIFFS partition - Total: %d bytes, Used: %d bytes (%.1f%%)", 
+                       total, used, (float)used/total*100);
+    }
+
+    ESP_UTILS_LOGI("Audio system initialization completed successfully");
+
+    ESP_UTILS_LOG_TRACE_GUARD();
+
+    // ==================== NVS存储服务启动 ====================
+    
+    // 启动NVS存储服务，这是所有持久化设置的基础
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        StorageNVS::requestInstance().begin(), false, 
+        "Failed to initialize NVS storage service"
+    );
+
+    // ==================== 系统设置参数初始化 ====================
+    
+    // 初始化音量设置
+    StorageNVS::Value volume = PARAM_SOUND_VOLUME_DEFAULT;
+    if (!StorageNVS::requestInstance().getLocalParam(SETTINGS_NVS_KEY_VOLUME, volume)) {
+        // 如果NVS中没有音量设置，使用默认值并记录警告
+        ESP_UTILS_LOGW("Volume setting not found in NVS, using default value: %d", std::get<int>(volume));
+    }
+    // 应用音量设置到音频硬件
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        set_media_sound_volume(std::get<int>(volume)), false, 
+        "Failed to apply volume setting to audio hardware"
+    );
+    
+    // 初始化显示亮度设置
+    StorageNVS::Value brightness = PARAM_DISPLAY_BRIGHTNESS_DEFAULT;
+    if (!StorageNVS::requestInstance().getLocalParam(SETTINGS_NVS_KEY_BRIGHTNESS, brightness)) {
+        // 如果NVS中没有亮度设置，使用默认值并记录警告
+        ESP_UTILS_LOGW("Brightness setting not found in NVS, using default value: %d", std::get<int>(brightness));
+    }
+    // 应用亮度设置到显示硬件
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        set_media_display_brightness(std::get<int>(brightness)), false, 
+        "Failed to apply brightness setting to display hardware"
+    );
+
+    ESP_UTILS_LOGI("System services initialization completed successfully");
+
+    ESP_UTILS_LOG_TRACE_GUARD();
+
+    // 准备配置数据结构
+    coze_agent_config_t config = {};           // 原始配置数据
+    CozeChatAgentInfo agent_info = {};         // AI代理信息
+    std::vector<CozeChatRobotInfo> robot_infos; // 机器人信息列表
+
+    // ==================== 尝试从SD卡读取用户配置 ====================       
+#if COZE_AGENT_ENABLE_DEFAULT_CONFIG
+        // 用户配置文件不存在或读取失败，使用编译时嵌入的默认配置
+        ESP_UTILS_LOGW("User configuration not found, using embedded default configuration");
+        
+        // 使用预定义的默认AI代理信息
+        agent_info.custom_consumer = COZE_AGENT_CUSTOM_CONSUMER;
+        agent_info.app_id = COZE_AGENT_APP_ID;
+        agent_info.public_key = COZE_AGENT_DEVICE_PUBLIC_KEY;
+        // 私钥从嵌入的二进制数据中读取
+        agent_info.private_key = std::string(private_key_pem_start, private_key_pem_end - private_key_pem_start);
+        
+        // 添加默认机器人配置(如果启用)
+#if COZE_AGENT_BOT1_ENABLE
+        robot_infos.push_back(CozeChatRobotInfo {
+            .name = COZE_AGENT_BOT1_NAME,
+            .bot_id = COZE_AGENT_BOT1_ID,
+            .voice_id = COZE_AGENT_BOT1_VOICE_ID,
+            .description = COZE_AGENT_BOT1_DESCRIPTION,
+        });
+        ESP_UTILS_LOGI("Added default bot 1: %s", COZE_AGENT_BOT1_NAME);
+#endif // COZE_AGENT_BOT1_ENABLE
+
+#if COZE_AGENT_BOT2_ENABLE
+        robot_infos.push_back(CozeChatRobotInfo {
+            .name = COZE_AGENT_BOT2_NAME,
+            .bot_id = COZE_AGENT_BOT2_ID,
+            .voice_id = COZE_AGENT_BOT2_VOICE_ID,
+            .description = COZE_AGENT_BOT2_DESCRIPTION,
+        });
+        ESP_UTILS_LOGI("Added default bot 2: %s", COZE_AGENT_BOT2_NAME);
+#endif // COZE_AGENT_BOT2_ENABLE
+
+#else
+        // 如果没有启用默认配置，且用户配置读取失败，则返回错误
+        ESP_UTILS_CHECK_FALSE_RETURN(false, false, 
+            "No configuration available: user config failed and default config disabled");
+#endif // COZE_AGENT_ENABLE_DEFAULT_CONFIG
+    
+
+    // ==================== 应用配置到AI代理实例 ====================
+    
+    // 将解析后的配置信息应用到AI代理实例
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        Agent::requestInstance()->configCozeAgentConfig(agent_info, robot_infos), false, 
+        "Failed to apply configuration to AI agent instance"
+    );
+
+    ESP_UTILS_LOGI("Coze agent configuration loaded successfully - %zu robot(s) configured", robot_infos.size());
+    
+    // 第7步：创建音箱主对象 - 启动完整的UI系统和所有应用程序
+    assert(create_speaker_and_install_apps()    && "Create speaker and install apps failed");
+    
+#if EXAMPLE_SHOW_MEM_INFO
+    char buffer[128];    /* Make sure buffer is enough for `sprintf` */
+    size_t internal_free = 0;
+    size_t internal_total = 0;
+    size_t external_free = 0;
+    size_t external_total = 0;
+    while (1) {
+        internal_free = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+        internal_total = heap_caps_get_total_size(MALLOC_CAP_INTERNAL);
+        external_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+        external_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+        
+        // 格式化内存信息字符串
+        sprintf(buffer, "   Biggest /     Free /    Total\n"
+                "\t  SRAM : [%8d / %8d / %8d]\n"
+                "\t PSRAM : [%8d / %8d / %8d]",
+                heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL), internal_free, internal_total,
+                heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM), external_free, external_total);
+        ESP_LOGI(TAG, "%s", buffer);
+
+        /**
+         * The `lockLv()` and `unlockLv()` functions are used to lock and unlock the LVGL task.
+         * They are registered by the `registerLvLockCallback()` and `registerLvUnlockCallback()` functions.
+         */
+        // speaker->lockLv();
+        // 已移除 phone 相关内存标签更新代码
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+#endif
+}
+
+static bool create_speaker_and_install_apps()
+{
+    ESP_UTILS_LOG_TRACE_GUARD();
+
+    Speaker *speaker = nullptr;
+    /* Create a speaker object */
+    ESP_UTILS_CHECK_EXCEPTION_RETURN(
+        speaker = new Speaker(), false, "Create speaker failed"
+    );
+
+    /* Try using a stylesheet that corresponds to the resolution */
+    std::unique_ptr<SpeakerStylesheet_t> stylesheet;
+    ESP_UTILS_CHECK_EXCEPTION_RETURN(
+        stylesheet = std::make_unique<SpeakerStylesheet_t>(ESP_BROOKESIA_SPEAKER_360_360_DARK_STYLESHEET), false,
+        "Create stylesheet failed"
+    );
+    ESP_UTILS_LOGI("Using stylesheet (%s)", stylesheet->core.name);
+    ESP_UTILS_CHECK_FALSE_RETURN(speaker->addStylesheet(stylesheet.get()), false, "Add stylesheet failed");
+    ESP_UTILS_CHECK_FALSE_RETURN(speaker->activateStylesheet(stylesheet.get()), false, "Activate stylesheet failed");
+    stylesheet = nullptr;
+
+    /* Configure and begin the speaker */
+    speaker->registerLvLockCallback((LockCallback)(bsp_display_lock), 0);
+    speaker->registerLvUnlockCallback((UnlockCallback)(bsp_display_unlock));
+    ESP_UTILS_LOGI("Display ESP-Brookesia speaker demo");
+
+    speaker->lockLv();
+
+    ESP_UTILS_CHECK_FALSE_RETURN(speaker->begin(), false, "Begin failed");
+
+    /* 5.Install app settings */
+    auto app_settings = Settings::requestInstance();
+    ESP_UTILS_CHECK_NULL_RETURN(app_settings, false, "Get app settings failed");
+    // Add app settings stylesheet
+    std::unique_ptr<SettingsStylesheetData> app_settings_stylesheet;
+    ESP_UTILS_CHECK_EXCEPTION_RETURN(
+        app_settings_stylesheet = std::make_unique<SettingsStylesheetData>(SETTINGS_UI_360_360_STYLESHEET_DARK()),
+        false, "Create app settings stylesheet failed"
+    );
+    app_settings_stylesheet->screen_size = ESP_BROOKESIA_STYLE_SIZE_RECT_PERCENT(100, 100);
+    app_settings_stylesheet->manager.wlan.scan_ap_count_max = 30;
+    app_settings_stylesheet->manager.wlan.scan_interval_ms = 10000;
+    app_settings_stylesheet->manager.about.device_board_name = "EchoEar";
+    app_settings_stylesheet->manager.about.device_ram_main = "512KB";
+    app_settings_stylesheet->manager.about.device_ram_minor = "16MB";
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        app_settings->addStylesheet(speaker, app_settings_stylesheet.get()), false, "Add app settings stylesheet failed"
+    );
+    ESP_UTILS_CHECK_FALSE_RETURN(
+        app_settings->activateStylesheet(app_settings_stylesheet.get()), false, "Activate app settings stylesheet failed"
+    );
+    app_settings_stylesheet = nullptr;
+    // Process settings events
+    app_settings->manager.event_signal.connect([](SettingsManager::EventType event_type, SettingsManager::EventData event_data) {
+        ESP_UTILS_LOG_TRACE_GUARD();
+
+        ESP_UTILS_LOGD("Param: event_type(%d), event_data(%s)", static_cast<int>(event_type), event_data.type().name());
+
+        switch (event_type) {
+        case SettingsManager::EventType::EnterDeveloperMode: {
+            ESP_UTILS_CHECK_FALSE_RETURN(
+                event_data.type() == typeid(SETTINGS_EVENT_DATA_TYPE_ENTER_DEVELOPER_MODE), false,
+                "Invalid developer mode type"
+            );
+
+            ESP_UTILS_LOGW("Enter developer mode");
+            developer_mode_key = DEVELOPER_MODE_KEY;
+            esp_restart();
+            break;
+        }
+        case SettingsManager::EventType::SetSoundVolume: {
+            ESP_UTILS_CHECK_FALSE_RETURN(
+                event_data.type() == typeid(SETTINGS_EVENT_DATA_TYPE_SET_SOUND_VOLUME), false, "Invalid volume type"
+            );
+
+            auto volume = std::any_cast<SETTINGS_EVENT_DATA_TYPE_SET_SOUND_VOLUME>(event_data);
+            ESP_UTILS_CHECK_FALSE_RETURN(
+                set_media_sound_volume(volume), false, "Set media sound volume failed"
+            );
+            break;
+        }
+        case SettingsManager::EventType::GetSoundVolume: {
+            ESP_UTILS_CHECK_FALSE_RETURN(
+                event_data.type() == typeid(SETTINGS_EVENT_DATA_TYPE_GET_SOUND_VOLUME), false, "Invalid volume type"
+            );
+
+            auto &volume = std::any_cast<SETTINGS_EVENT_DATA_TYPE_GET_SOUND_VOLUME>(event_data).get();
+            volume = get_media_sound_volume();
+            break;
+        }
+        case SettingsManager::EventType::SetDisplayBrightness: {
+            ESP_UTILS_CHECK_FALSE_RETURN(
+                event_data.type() == typeid(SETTINGS_EVENT_DATA_TYPE_SET_DISPLAY_BRIGHTNESS), false,
+                "Invalid brightness type"
+            );
+
+            auto brightness = std::any_cast<SETTINGS_EVENT_DATA_TYPE_SET_DISPLAY_BRIGHTNESS>(event_data);
+            ESP_UTILS_CHECK_FALSE_RETURN(
+                set_media_display_brightness(brightness), false, "Set media display brightness failed"
+            );
+            break;
+        }
+        case SettingsManager::EventType::GetDisplayBrightness: {
+            ESP_UTILS_CHECK_FALSE_RETURN(
+                event_data.type() == typeid(SETTINGS_EVENT_DATA_TYPE_GET_DISPLAY_BRIGHTNESS), false,
+                "Invalid brightness type"
+            );
+
+            auto &brightness = std::any_cast<SETTINGS_EVENT_DATA_TYPE_GET_DISPLAY_BRIGHTNESS>(event_data).get();
+            brightness = get_media_display_brightness();
+            break;
+        }
+        default:
+            return false;
+        }
+
+        return true;
+    });
+    auto app_settings_id = speaker->installApp(app_settings);
+    ESP_UTILS_CHECK_FALSE_RETURN(speaker->checkAppID_Valid(app_settings_id), false, "Install app settings failed");
+
+    /* 6.Install app ai profile */
+    auto app_ai_profile = AI_Profile::requestInstance();
+    ESP_UTILS_CHECK_NULL_RETURN(app_ai_profile, false, "Get app ai profile failed");
+    auto app_ai_profile_id = speaker->installApp(app_ai_profile);
+    ESP_UTILS_CHECK_FALSE_RETURN(speaker->checkAppID_Valid(app_ai_profile_id), false, "Install app ai profile failed");
+
+    /* Install 2048 game app */
+    Game2048 *app_game_2048 = nullptr;
+    ESP_UTILS_CHECK_EXCEPTION_RETURN(app_game_2048 = new Game2048(240, 360), false, "Create 2048 game app failed");
+    auto app_game_2048_id = speaker->installApp(app_game_2048);
+    ESP_UTILS_CHECK_FALSE_RETURN(speaker->checkAppID_Valid(app_game_2048_id), false, "Install 2048 game app failed");
+
+    /* Install calculator app */
+    Calculator *app_calculator = nullptr;
+    ESP_UTILS_CHECK_EXCEPTION_RETURN(app_calculator = new Calculator(), false, "Create calculator app failed");
+    auto app_calculator_id = speaker->installApp(app_calculator);
+    ESP_UTILS_CHECK_FALSE_RETURN(speaker->checkAppID_Valid(app_calculator_id), false, "Install calculator app failed");
+
+    /* Install timer app */
+    auto app_timer = Timer::requestInstance();
+    ESP_UTILS_CHECK_NULL_RETURN(app_timer, false, "Get timer app failed");
+    auto app_timer_id = speaker->installApp(app_timer);
+    ESP_UTILS_CHECK_FALSE_RETURN(speaker->checkAppID_Valid(app_timer_id), false, "Install timer app failed");
+    /* 7. 解锁 LVGL */
+    speaker->unlockLv();
+
+    /* Register function callings */
+    FunctionDefinition openApp("open_app", "Open a specific app.打开一个应用");
+    //添加参数定义
+    openApp.addParameter("app_name", "The name of the app to open.应用名称", FunctionParameter::ValueType::String);
+    openApp.setCallback([ = ](const std::vector<FunctionParameter> &params) {
+        ESP_UTILS_LOG_TRACE_GUARD();
+
+        static std::map<int, std::vector<std::string>> app_name_map = {
+            {app_settings_id, {app_settings->getName(), "setting", "settings", "设置", "设置应用", "设置app"}},
+            {app_game_2048_id, {app_game_2048->getName(), "2048", "game", "游戏", "2048游戏", "2048app"}},
+            {app_calculator_id, {app_calculator->getName(), "calculator", "calc", "计算器", "计算器应用", "计算器app"}},
+            {app_ai_profile_id, {app_ai_profile->getName(), "AI profile", "ai 配置", "ai配置", "ai设置", "ai设置应用", "ai设置app"}},
+            {app_timer_id, {app_timer->getName(), "timer", "时钟", "时钟应用", "时钟app"}}
+        };
+        //数据解析，看看有没有功能能用上
+        //目前支持打开应用，调节音量控制和亮度控制
+        for (const auto &param : params) {
+            if (param.name() == "app_name") {
+                auto app_name = param.string();
+                ESP_UTILS_LOGI("Opening app: %s", app_name.c_str());
+
+                ESP_Brookesia_CoreAppEventData_t event_data = {
+                    .id = -1,
+                    .type = ESP_BROOKESIA_CORE_APP_EVENT_TYPE_START,
+                    .data = nullptr
+                };
+                auto target_name = to_lower(get_before_space(app_name));
+                for (const auto &pair : app_name_map) {
+                    if (std::find(pair.second.begin(), pair.second.end(), target_name) != pair.second.end()) {
+                        event_data.id = pair.first;
+                        break;
+                    }
+                }
+
+                if (event_data.id == -1) {
+                    ESP_UTILS_LOGW("App name not found");
+                    return;
+                }
+
+                boost::this_thread::sleep_for(boost::chrono::milliseconds(FUNCTION_OPEN_APP_WAIT_SPEAKING_PRE_MS));
+
+                int wait_count = 0;
+                int wait_interval_ms = FUNCTION_OPEN_APP_WAIT_SPEAKING_INTERVAL_MS;
+                int wait_max_count = FUNCTION_OPEN_APP_WAIT_SPEAKING_MAX_MS / wait_interval_ms;
+                while ((wait_count < wait_max_count) && AI_Buddy::requestInstance()->isSpeaking()) {
+                    boost::this_thread::sleep_for(boost::chrono::milliseconds(wait_interval_ms));
+                    wait_count++;
+                }
+
+                speaker->lockLv();
+                speaker->manager.processDisplayScreenChange(
+                    ESP_BROOKESIA_SPEAKER_MANAGER_SCREEN_MAIN, nullptr
+                );
+                speaker->sendAppEvent(&event_data);
+                speaker->unlockLv();
+            }
+        }
+    }, std::make_optional<FunctionDefinition::CallbackThreadConfig>({
+        .name = FUNCTION_OPEN_APP_THREAD_NAME,
+        .stack_size = FUNCTION_OPEN_APP_THREAD_STACK_SIZE,
+        .stack_in_ext = FUNCTION_OPEN_APP_THREAD_STACK_CAPS_EXT,
+    }));
+    FunctionDefinitionList::requestInstance().addFunction(openApp);
+
+    /* 注册AI函数调用 - 音量控制功能 */
+    // 这个函数允许AI助手通过语音指令控制设备音量
+    FunctionDefinition setVolume("set_volume", "Adjust the system volume. Range is from 0 to 100.");
+    setVolume.addParameter("level", "The desired volume level (0 to 100).", FunctionParameter::ValueType::String);
+    setVolume.setCallback([ = ](const std::vector<FunctionParameter> &params) {
+        ESP_UTILS_LOG_TRACE_GUARD();
+
+        // 获取AI伙伴实例，用于控制机器人表情
+        auto ai_buddy = AI_Buddy::requestInstance();
+        ESP_UTILS_CHECK_NULL_EXIT(ai_buddy, "Failed to get ai buddy instance");
+
+        for (const auto &param : params) {
+            if (param.name() == "level") {
+                int last_volume = get_media_sound_volume();
+                int volume = atoi(param.string().c_str());
+
+                // 根据音量变化显示对应的表情图标
+                if (volume < 0) {
+                    // 降低音量
+                    volume = last_volume - FUNCTION_VOLUME_CHANGE_STEP;
+                    if (volume <= 0) {
+                        // 音量为0时显示静音图标
+                        ESP_UTILS_CHECK_FALSE_EXIT(
+                            ai_buddy->expression.setSystemIcon("volume_mute"),
+                            "Failed to set volume mute icon"
+                        );
+                    } else {
+                        // 显示音量降低图标
+                        ESP_UTILS_CHECK_FALSE_EXIT(
+                            ai_buddy->expression.setSystemIcon("volume_down"), "Failed to set volume down icon"
+                        );
+                    }
+                } else if (volume > 100) {
+                    // 提高音量，显示音量提高图标
+                    volume = last_volume + FUNCTION_VOLUME_CHANGE_STEP;
+                    ESP_UTILS_CHECK_FALSE_EXIT(
+                        ai_buddy->expression.setSystemIcon("volume_up"), "Failed to set volume up icon"
+                    );
+                }
+                ESP_UTILS_CHECK_FALSE_EXIT(set_media_sound_volume(volume), "Failed to set volume");
+            }
+        }
+    }, std::make_optional<FunctionDefinition::CallbackThreadConfig>(FunctionDefinition::CallbackThreadConfig{
+        .name = FUNCTION_VOLUME_CHANGE_THREAD_NAME,
+        .stack_size = FUNCTION_VOLUME_CHANGE_THREAD_STACK_SIZE,
+        .stack_in_ext = FUNCTION_VOLUME_CHANGE_THREAD_STACK_CAPS_EXT,
+    }));
+    FunctionDefinitionList::requestInstance().addFunction(setVolume);
+
+    /* 注册AI函数调用 - 亮度控制功能 */
+    // 这个函数允许AI助手通过语音指令控制屏幕亮度
+    FunctionDefinition setBrightness("set_brightness", "Adjust the system brightness. Range is from 10 to 100.");
+    setBrightness.addParameter("level", "The desired brightness level (10 to 100).", FunctionParameter::ValueType::String);
+    setBrightness.setCallback([ = ](const std::vector<FunctionParameter> &params) {
+        ESP_UTILS_LOG_TRACE_GUARD();
+
+        // 获取AI伙伴实例，用于控制机器人表情
+        auto ai_buddy = AI_Buddy::requestInstance();
+        ESP_UTILS_CHECK_NULL_EXIT(ai_buddy, "Failed to get ai buddy instance");
+
+        for (const auto &param : params) {
+            if (param.name() == "level") {
+                int last_brightness = get_media_display_brightness();
+                int brightness = atoi(param.string().c_str());
+
+                // 根据亮度变化显示对应的表情图标
+                if (brightness < 0) {
+                    // 降低亮度，显示亮度降低图标
+                    brightness = last_brightness - FUNCTION_BRIGHTNESS_CHANGE_STEP;
+                    ESP_UTILS_CHECK_FALSE_EXIT(
+                        ai_buddy->expression.setSystemIcon("brightness_down"), "Failed to set brightness down icon"
+                    );
+                } else if (brightness > 100) {
+                    // 提高亮度，显示亮度提高图标
+                    brightness = last_brightness + FUNCTION_BRIGHTNESS_CHANGE_STEP;
+                    ESP_UTILS_CHECK_FALSE_EXIT(
+                        ai_buddy->expression.setSystemIcon("brightness_up"), "Failed to set brightness up icon"
+                    );
+                }
+                ESP_UTILS_CHECK_FALSE_EXIT(set_media_display_brightness(brightness), "Failed to set brightness");
+            }
+        }
+    }, std::make_optional<FunctionDefinition::CallbackThreadConfig>(FunctionDefinition::CallbackThreadConfig{
+        .name = FUNCTION_BRIGHTNESS_CHANGE_THREAD_NAME,
+        .stack_size = FUNCTION_BRIGHTNESS_CHANGE_THREAD_STACK_SIZE,
+        .stack_in_ext = FUNCTION_BRIGHTNESS_CHANGE_THREAD_STACK_CAPS_EXT,
+    }));
+    FunctionDefinitionList::requestInstance().addFunction(setBrightness);
+
+    // /* Connect the quick settings event signal */
+    // speaker->getDisplay().getQuickSettings().on_event_signal.connect([=](QuickSettings::EventType event_type) {
+    //     if ((event_type != QuickSettings::EventType::SettingsButtonClicked) &&
+    //         (speaker->getCoreManager().getRunningAppById(app_settings_id) != nullptr)) {
+    //         return true;
+    //     }
+
+    //     ESP_Brookesia_CoreAppEventData_t event_data = {
+    //         .id = app_settings_id,
+    //         .type = ESP_BROOKESIA_CORE_APP_EVENT_TYPE_START,
+    //         .data = nullptr
+    //     };
+    //     speaker->sendAppEvent(&event_data);
+
+    //     return true;
+    // });
+
+    /* Create a timer to update the clock */
+    // ESP_UTILS_CHECK_NULL_EXIT(lv_timer_create(on_clock_update_timer_cb, 1000, speaker), "Create clock update timer failed");
 
     return true;
 }
+
+

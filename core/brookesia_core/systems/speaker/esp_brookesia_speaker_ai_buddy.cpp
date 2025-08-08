@@ -5,6 +5,7 @@
  */
 #include <random>
 #include "esp_wifi.h"
+#include "esp_timer.h"
 #include "esp_brookesia_systems_internal.h"
 #if !ESP_BROOKESIA_SPEAKER_AI_BUDDY_ENABLE_DEBUG_LOG
 #   define ESP_BROOKESIA_UTILS_DISABLE_DEBUG_LOG

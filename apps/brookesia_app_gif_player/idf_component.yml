@@ -1,0 +1,40 @@
+## IDF Component Manager Manifest File
+# This file describes the component's dependencies and metadata
+# More information: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/tools/idf-component-manager.html
+
+description: "ESP-Brookesia GIF播放器应用程序组件"
+url: https://github.com/espressif/esp-brookesia
+
+dependencies:
+  # ESP-IDF components
+  esp_timer: "*"
+  spiffs: "*"
+  fatfs: "*"
+  
+  # LVGL graphics library  
+  lvgl:
+    version: "~8.3.0"
+    require: public
+    
+  # ESP-Brookesia framework
+  esp_brookesia_core:
+    version: "*"
+    require: public
+
+targets:
+  - esp32
+  - esp32s2  
+  - esp32s3
+  - esp32c3
+  - esp32c6
+
+examples:
+  - path: ./gifs/
+    description: "示例GIF文件目录"
+    
+tags:
+  - gui
+  - app
+  - gif
+  - animation
+  - multimedia

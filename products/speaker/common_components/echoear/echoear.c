@@ -714,20 +714,15 @@ lv_disp_t *bsp_display_start(void)
 lv_disp_t *bsp_display_start_with_config(const bsp_display_cfg_t *cfg)
 {
     assert(cfg != NULL);
-    
     /* 初始化LVGL端口 */
     BSP_ERROR_CHECK_RETURN_NULL(lvgl_port_init(&cfg->lvgl_port_cfg));
-
     /* 初始化显示背光控制 */
     BSP_ERROR_CHECK_RETURN_NULL(bsp_display_brightness_init());
-
     /* 初始化LCD显示器 */
     BSP_NULL_CHECK(disp = bsp_display_lcd_init(cfg), NULL);
     lv_display_set_user_data(disp, (void *)panel_handle);  // 关联LCD面板句柄
-
     /* 初始化触控输入设备 */
     BSP_NULL_CHECK(disp_indev = bsp_display_indev_init(disp), NULL);
-
     return disp;  // 返回LVGL显示对象
 }
 

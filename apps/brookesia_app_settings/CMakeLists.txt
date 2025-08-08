@@ -24,6 +24,11 @@ idf_component_register(
     REQUIRES esp_event esp_wifi spi_flash
 )
 
+# Add project version definition
+target_compile_definitions(${COMPONENT_LIB} PRIVATE 
+    CONFIG_APP_PROJECT_VER="${PROJECT_VER}"
+)
+
 set_source_files_properties(
     ${SRCS_CPP}
     PROPERTIES

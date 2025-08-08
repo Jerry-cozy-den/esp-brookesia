@@ -1,8 +1,25 @@
+file(GLOB_RECURSE MAIN_SRCS ./*.cpp ./*.c)
+set(EMBEDDED_FILES "")
+
+if (CONFIG_EXAMPLE_COZE_AGENT_PRIVATE_KEY_FILE_PATH)
+    list(APPEND EMBEDDED_FILES ${CONFIG_EXAMPLE_COZE_AGENT_PRIVATE_KEY_FILE_PATH})
+    message(STATUS "Coze Private Key Path: ${CONFIG_EXAMPLE_COZE_AGENT_PRIVATE_KEY_FILE_PATH}")
+endif()
+
 idf_component_register(
-    SRCS "main.cpp"
-    INCLUDE_DIRS ".")
+    SRCS ${MAIN_SRCS}
+    INCLUDE_DIRS "."
+    EMBED_TXTFILES ${EMBEDDED_FILES}
+    REQUIRES "brookesia_core")
 
 target_compile_options(${COMPONENT_LIB} PUBLIC -Wno-missing-field-initializers)
+
+spiffs_create_partition_image(spiffs_data ../spiffs FLASH_IN_PROJECT)
+
+# Add project version definition
+target_compile_definitions(${COMPONENT_LIB} PRIVATE 
+    CONFIG_APP_PROJECT_VER="${PROJECT_VER}"
+)
 
 # Function to get component library
 function(get_component_library component_name output_var)
@@ -26,8 +43,35 @@ function(get_component_library component_name output_var)
 endfunction()
 
 get_component_library("lvgl" LVGL_LIB)
+if(CONFIG_LV_USE_CUSTOM_MALLOC)
+    target_link_libraries(${LVGL_LIB}
+        PUBLIC
+            "-u lv_mem_init"
+            "-u lv_mem_deinit"
+    )
+elseif(CONFIG_LV_USE_BUILTIN_MALLOC)
+    target_compile_options(${LVGL_LIB}
+        PUBLIC
+            "-DLV_ATTRIBUTE_LARGE_RAM_ARRAY=EXT_RAM_BSS_ATTR"
+    )
+endif()
+if(CONFIG_LV_ATTRIBUTE_FAST_MEM_USE_IRAM)
+    target_compile_options(
+        ${LVGL_LIB}
+        PUBLIC
+            "-Wno-attributes"
+    )
+endif()
+
+get_component_library("gmf_core" GMF_CORE_LIB)
 target_compile_options(
-    ${LVGL_LIB}
+    ${GMF_CORE_LIB}
     PUBLIC
-        "-Wno-attributes"
+        "-fpermissive"
+)
+
+get_component_library("gmf_ai_audio" GMF_AI_AUDIO_LIB)
+target_compile_options(
+    ${GMF_AI_AUDIO_LIB}
+    PUBLIC
 )
