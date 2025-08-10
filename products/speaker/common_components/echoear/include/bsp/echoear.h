@@ -41,6 +41,7 @@
 #define BSP_CAPS_SDCARD 1        /*!< SD卡支持：支持microSD卡存储 */
 #define BSP_CAPS_IMU 0           /*!< 惯性测量单元支持：当前版本IMU功能未启用 */
 
+#define BSP_CAPS_JX 1            /*!< j*/
 /* I2C 总线配置
  * EchoEar开发板使用I2C总线连接多个外设设备
  */
@@ -75,6 +76,8 @@
 #define BSP_LCD_RST_V1_2 (GPIO_NUM_47)        /*!< LCD复位信号 (V1.2版本) */
 #define LCD_BACKLIIGHT_CHANNEL LEDC_CHANNEL_1 /*!< LCD背光PWM通道 (LEDC通道1) */
 #define BSP_LCD_BACKLIGHT (GPIO_NUM_44)       /*!< LCD背光控制GPIO - PWM亮度调节 */
+//想一个背光控制功能的开关定义宏
+#define BSP_LCD_BACKLIGHT_SWITCH (1)          /*!< LCD背光开关控制宏 */
 #define BSP_LCD_TOUCH_INT (GPIO_NUM_10)       /*!< 触控中断信号 - 检测触摸事件 */
 
 /* 电源管理配置 */

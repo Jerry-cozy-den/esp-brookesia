@@ -380,7 +380,7 @@ static bool init_display_and_draw_logic()
     // ==================== BSP 和显示驱动初始化 ====================
     
     // 初始化板级电源管理(参数0表示使用默认配置)
-    bsp_power_init(0);
+    // bsp_power_init(0);-极星版本删除
     
     // 配置显示系统参数
     bsp_display_cfg_t cfg = {

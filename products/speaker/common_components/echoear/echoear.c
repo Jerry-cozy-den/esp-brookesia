@@ -187,6 +187,7 @@ esp_err_t bsp_display_brightness_init(void)
  */
 esp_err_t bsp_display_brightness_set(int brightness_percent)
 {
+#if BSP_LCD_BACKLIGHT_SWITCH 
     /* 限制亮度值在有效范围内 */
     if (brightness_percent > 100) {
         brightness_percent = 100;
@@ -205,6 +206,10 @@ esp_err_t bsp_display_brightness_set(int brightness_percent)
     BSP_ERROR_CHECK_RETURN_ERR(ledc_update_duty(LEDC_LOW_SPEED_MODE, LCD_LEDC_CH));
 
     return ESP_OK;
+#else
+    ESP_LOGW(TAG, "This jixing****board doesn't support to change brightness of LCD");
+    return ESP_ERR_NOT_SUPPORTED;
+#endif
 }
 
 /**
@@ -463,8 +468,12 @@ esp_err_t bsp_display_new(const bsp_display_config_t *config, esp_lcd_panel_hand
     assert(config != NULL && config->max_transfer_sz > 0);
 
     /* 初始化显示背光控制 */
+    #if BSP_LCD_BACKLIGHT_SWITCH
     ESP_RETURN_ON_ERROR(bsp_display_brightness_init(), TAG, "Brightness init failed");
-    
+    #else
+    ESP_LOGW(TAG, "This jixing****board doesn't support to change brightness of LCD");
+    #endif
+
     /* 检测PCB版本，获取版本相关的GPIO配置 */
     BSP_ERROR_CHECK_RETURN_ERR(bsp_pcb_version_detect(NULL));
 
