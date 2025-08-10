@@ -3,6 +3,10 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+//
+// esp_brookesia_core_app.cpp
+// 本文件实现了 Brookesia Core App 的基类，负责应用的生命周期管理、资源管理、屏幕适配、主题切换等核心功能。
+//
 #include <algorithm>
 #include "esp_brookesia_systems_internal.h"
 #if !ESP_BROOKESIA_CORE_APP_ENABLE_DEBUG_LOG
@@ -20,6 +24,7 @@
 using namespace std;
 using namespace esp_brookesia::gui;
 
+// 构造函数：通过数据结构初始化 App
 ESP_Brookesia_CoreApp::ESP_Brookesia_CoreApp(const ESP_Brookesia_CoreAppData_t &data):
     _core(nullptr),
     _core_init_data(data),
@@ -39,6 +44,7 @@ ESP_Brookesia_CoreApp::ESP_Brookesia_CoreApp(const ESP_Brookesia_CoreAppData_t &
 {
 }
 
+// 构造函数：通过名称、图标和默认屏幕标志初始化 App
 ESP_Brookesia_CoreApp::ESP_Brookesia_CoreApp(const char *name, const void *launcher_icon, bool use_default_screen):
     _core(nullptr),
     _core_init_data(ESP_BROOKESIA_CORE_APP_DATA_DEFAULT(name, launcher_icon, use_default_screen)),
@@ -58,12 +64,14 @@ ESP_Brookesia_CoreApp::ESP_Brookesia_CoreApp(const char *name, const void *launc
 {
 }
 
+// 检查 App 是否已初始化
 bool ESP_Brookesia_CoreApp::checkInitialized(void) const
 {
     return (_id >= ESP_BROOKESIA_CORE_APP_ID_MIN) && (_core != nullptr) &&
            (_core->getCoreManager().getInstalledApp(_id) == this);
 }
 
+// 通知 Core 层 App 已关闭
 bool ESP_Brookesia_CoreApp::notifyCoreClosed(void) const
 {
     lv_obj_t *event_obj = nullptr;
@@ -93,6 +101,7 @@ bool ESP_Brookesia_CoreApp::notifyCoreClosed(void) const
     return true;
 }
 
+// 设置启动图标
 void ESP_Brookesia_CoreApp::setLauncherIconImage(const ESP_Brookesia_StyleImage_t &icon_image)
 {
     _core_active_data.launcher_icon = icon_image;

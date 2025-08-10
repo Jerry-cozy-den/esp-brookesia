@@ -1,0 +1,2 @@
+C:/Users/jiang/Documents/Github/5-ESPIDF/esp-brookesia/products/phone/phone_s3_lcd_ev_board_jerry/CMakeFiles/edit_cache.dir
+C:/Users/jiang/Documents/Github/5-ESPIDF/esp-brookesia/products/phone/phone_s3_lcd_ev_board_jerry/CMakeFiles/rebuild_cache.dir

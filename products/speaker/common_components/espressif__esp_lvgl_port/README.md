@@ -1,24 +1,24 @@
-# LVGL ESP 移植组件
+# LVGL ESP 移植组件（中文翻译）
 
-[![Component Registry](https://components.espressif.com/components/espressif/esp_lvgl_port/badge.svg)](https://components.espressif.com/components/espressif/esp_lvgl_port)
-![maintenance-status](https://img.shields.io/badge/maintenance-actively--developed-brightgreen.svg)
+[![组件注册表](https://components.espressif.com/components/espressif/esp_lvgl_port/badge.svg)](https://components.espressif.com/components/espressif/esp_lvgl_port)
+![维护状态](https://img.shields.io/badge/maintenance-actively--developed-brightgreen.svg)
 
-这个组件帮助在ESP设备上使用LVGL图形库配合乐鑫的LCD和触摸驱动程序。它可以用于任何带有LCD显示屏的项目。
+本组件用于在 ESP 设备上结合乐鑫 LCD 和触摸驱动程序使用 LVGL 图形库。适用于任何带 LCD 显示屏的项目。
 
 ## 特性
-* LVGL初始化
+* LVGL 初始化
     * 创建任务和定时器
     * 处理屏幕旋转
     * 电源管理
-* 添加/移除显示屏 (使用 [`esp_lcd`](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/lcd.html))
-* 添加/移除触摸输入 (使用 [`esp_lcd_touch`](https://github.com/espressif/esp-bsp/tree/master/components/lcd_touch))
-* 添加/移除导航按钮输入 (使用 [`button`](https://github.com/espressif/esp-iot-solution/tree/master/components/button))
-* 添加/移除编码器输入 (使用 [`knob`](https://github.com/espressif/esp-iot-solution/tree/master/components/knob))
-* 添加/移除USB HID鼠标/键盘输入 (使用 [`usb_host_hid`](https://components.espressif.com/components/espressif/usb_host_hid))
+* 添加/移除显示屏（使用 [`esp_lcd`](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/lcd.html)）
+* 添加/移除触摸输入（使用 [`esp_lcd_touch`](https://github.com/espressif/esp-bsp/tree/master/components/lcd_touch)）
+* 添加/移除导航按钮输入（使用 [`button`](https://github.com/espressif/esp-iot-solution/tree/master/components/button)）
+* 添加/移除编码器输入（使用 [`knob`](https://github.com/espressif/esp-iot-solution/tree/master/components/knob)）
+* 添加/移除 USB HID 鼠标/键盘输入（使用 [`usb_host_hid`](https://components.espressif.com/components/espressif/usb_host_hid)）
 
-## LVGL Version
+## LVGL 版本
 
-This component supports **LVGL8** and **LVGL9**. By default, it selects the latest LVGL version. If you want to use a specific version (e.g. latest LVGL8), you can easily define this requirement in `idf_component.yml` in your project like this:
+本组件支持 **LVGL8** 和 **LVGL9**。默认选择最新的 LVGL 版本。如果你想使用特定版本（如最新的 LVGL8），可在项目的 `idf_component.yml` 中这样定义：
 
 ```
   lvgl/lvgl:
@@ -26,13 +26,13 @@ This component supports **LVGL8** and **LVGL9**. By default, it selects the l
     public: true
 ```
 
-### LVGL Version Compatibility
+### LVGL 版本兼容性
 
-This component is fully compatible with LVGL version 9. All types and functions are used from LVGL9. Some LVGL9 types are not supported in LVGL8 and there are retyped in [`esp_lvgl_port_compatibility.h`](include/esp_lvgl_port_compatibility.h) header file. **Please, be aware, that some draw and object functions are not compatible between LVGL8 and LVGL9.**
+本组件完全兼容 LVGL 9。所有类型和函数均来自 LVGL9。部分 LVGL9 类型在 LVGL8 中不支持，已在 [`esp_lvgl_port_compatibility.h`](include/esp_lvgl_port_compatibility.h) 头文件中重新定义。**请注意，部分绘图和对象函数在 LVGL8 与 LVGL9 之间不兼容。**
 
-## Usage
+## 用法
 
-### Initialization
+### 初始化
 ``` c
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     esp_err_t err = lvgl_port_init(&lvgl_cfg);
@@ -40,20 +40,20 @@ This component is fully compatible with LVGL version 9. All types and functions 
 
 ### 添加屏幕
 
-向LVGL添加LCD屏幕。可以多次调用此函数来添加多个LCD屏幕。
+向 LVGL 添加 LCD 屏幕。可多次调用此函数以添加多个 LCD 屏幕。
 
 ``` c
     static lv_disp_t * disp_handle;
 
     /* LCD IO */
-	esp_lcd_panel_io_handle_t io_handle = NULL;
-	ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t) 1, &io_config, &io_handle));
+    esp_lcd_panel_io_handle_t io_handle = NULL;
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t) 1, &io_config, &io_handle));
 
     /* LCD 驱动初始化 */
     esp_lcd_panel_handle_t lcd_panel_handle;
     ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io_handle, &panel_config, &lcd_panel_handle));
 
-    /* 添加LCD屏幕 */
+    /* 添加 LCD 屏幕 */
     const lvgl_port_display_cfg_t disp_cfg = {
         .io_handle = io_handle,
         .panel_handle = lcd_panel_handle,
@@ -78,17 +78,17 @@ This component is fully compatible with LVGL version 9. All types and functions 
 
     /* ... 其余初始化代码 ... */
 
-    /* If deinitializing LVGL port, remember to delete all displays: */
+    /* 若要反初始化 LVGL 端口，请记得删除所有显示屏： */
     lvgl_port_remove_disp(disp_handle);
 ```
 
 > [!NOTE]
-> 1. For adding RGB or MIPI-DSI screen, use functions `lvgl_port_add_disp_rgb` or `lvgl_port_add_disp_dsi`.
-> 2. DMA buffer can be used only when you use color format `LV_COLOR_FORMAT_RGB565`.
+> 1. 若要添加 RGB 或 MIPI-DSI 屏幕，请使用 `lvgl_port_add_disp_rgb` 或 `lvgl_port_add_disp_dsi`。
+> 2. 仅当使用 `LV_COLOR_FORMAT_RGB565` 颜色格式时才可使用 DMA 缓冲区。
 
-### Add touch input
+### 添加触摸输入
 
-Add touch input to the LVGL. It can be called more times for adding more touch inputs.
+向 LVGL 添加触摸输入。可多次调用以为不同屏幕添加多个触摸输入。
 ``` c
     /* Touch driver initialization */
     ...
@@ -102,18 +102,18 @@ Add touch input to the LVGL. It can be called more times for adding more touch i
     };
     lv_indev_t* touch_handle = lvgl_port_add_touch(&touch_cfg);
 
-    /* ... the rest of the initialization ... */
+    /* ... 其余初始化代码 ... */
 
-    /* If deinitializing LVGL port, remember to delete all touches: */
+    /* 若要反初始化 LVGL 端口，请记得删除所有触摸输入： */
     lvgl_port_remove_touch(touch_handle);
 ```
 
 > [!NOTE]
-> If the screen has another resolution than the touch resolution, you can use scaling by add `.scale.x` or `.scale.y` into `lvgl_port_touch_cfg_t` configuration structure.
+> 如果屏幕分辨率与触摸分辨率不同，可在 `lvgl_port_touch_cfg_t` 配置结构体中添加 `.scale.x` 或 `.scale.y` 启用缩放。
 
-### Add buttons input
+### 添加按钮输入
 
-Add buttons input to the LVGL. It can be called more times for adding more buttons inputs for different displays. This feature is available only when the component `espressif/button` was added into the project.
+向 LVGL 添加按钮输入。可多次调用以为不同显示屏添加多个按钮输入。此功能仅在项目已添加 `espressif/button` 组件时可用。
 ``` c
     /* Buttons configuration structure */
     const button_gpio_config_t bsp_button_config[] = {
@@ -150,17 +150,17 @@ Add buttons input to the LVGL. It can be called more times for adding more butto
     /* Add buttons input (for selected screen) */
     lv_indev_t* buttons_handle = lvgl_port_add_navigation_buttons(&btns);
 
-    /* ... the rest of the initialization ... */
+    /* ... 其余初始化代码 ... */
 
-    /* If deinitializing LVGL port, remember to delete all buttons: */
+    /* 若要反初始化 LVGL 端口，请记得删除所有按钮输入： */
     lvgl_port_remove_navigation_buttons(buttons_handle);
 ```
 > [!NOTE]
-> When you use navigation buttons for control LVGL objects, these objects must be added to LVGL groups. See [LVGL documentation](https://docs.lvgl.io/master/overview/indev.html?highlight=lv_indev_get_act#keypad-and-encoder) for more info.
+> 使用导航按钮控制 LVGL 对象时，这些对象必须加入 LVGL 组。详见 [LVGL 文档](https://docs.lvgl.io/master/overview/indev.html?highlight=lv_indev_get_act#keypad-and-encoder)。
 
-### Add encoder input
+### 添加编码器输入
 
-Add encoder input to the LVGL. It can be called more times for adding more encoder inputs for different displays. This feature is available only when the component `espressif/knob` was added into the project.
+向 LVGL 添加编码器输入。可多次调用以为不同显示屏添加多个编码器输入。此功能仅在项目已添加 `espressif/knob` 组件时可用。
 ``` c
 
     static const button_gpio_config_t encoder_btn_config = {
@@ -188,17 +188,17 @@ Add encoder input to the LVGL. It can be called more times for adding more encod
     /* Add encoder input (for selected screen) */
     lv_indev_t* encoder_handle = lvgl_port_add_encoder(&encoder);
 
-    /* ... the rest of the initialization ... */
+    /* ... 其余初始化代码 ... */
 
-    /* If deinitializing LVGL port, remember to delete all encoders: */
+    /* 若要反初始化 LVGL 端口，请记得删除所有编码器： */
     lvgl_port_remove_encoder(encoder_handle);
 ```
 > [!NOTE]
-> When you use encoder for control LVGL objects, these objects must be added to LVGL groups. See [LVGL documentation](https://docs.lvgl.io/master/overview/indev.html?highlight=lv_indev_get_act#keypad-and-encoder) for more info.
+> 使用编码器控制 LVGL 对象时，这些对象必须加入 LVGL 组。详见 [LVGL 文档](https://docs.lvgl.io/master/overview/indev.html?highlight=lv_indev_get_act#keypad-and-encoder)。
 
-### Add USB HID keyboard and mouse input
+### 添加 USB HID 键盘和鼠标输入
 
-Add mouse and keyboard input to the LVGL. This feature is available only when the component [usb_host_hid](https://components.espressif.com/components/espressif/usb_host_hid) was added into the project.
+向 LVGL 添加鼠标和键盘输入。此功能仅在项目已添加组件 [usb_host_hid](https://components.espressif.com/components/espressif/usb_host_hid) 时可用。
 
 ``` c
     /* USB initialization */
@@ -224,19 +224,19 @@ Add mouse and keyboard input to the LVGL. This feature is available only when th
     kb_indev = lvgl_port_add_usb_hid_keyboard_input(&kb_cfg);
 ```
 
-Keyboard special behavior (when objects are in group):
-- **TAB**: Select next object
-- **SHIFT** + **TAB**: Select previous object
-- **ENTER**: Control object (e.g. click to button)
-- **ARROWS** or **HOME** or **END**: Move in text area
-- **DEL** or **Backspace**: Remove character in textarea
+键盘特殊行为（当对象在组中时）：
+- TAB：选择下一个对象
+- SHIFT + TAB：选择上一个对象
+- ENTER：控制对象（例如点击按钮）
+- 方向键 或 HOME 或 END：在文本区域中移动
+- DEL 或 Backspace：在文本区域中删除字符
 
 > [!NOTE]
-> When you use keyboard for control LVGL objects, these objects must be added to LVGL groups. See [LVGL documentation](https://docs.lvgl.io/master/overview/indev.html?highlight=lv_indev_get_act#keypad-and-encoder) for more info.
+> 使用键盘控制 LVGL 对象时，这些对象必须加入 LVGL 组。详见 [LVGL 文档](https://docs.lvgl.io/master/overview/indev.html?highlight=lv_indev_get_act#keypad-and-encoder)。
 
-### LVGL API usage
+### LVGL API 使用
 
-Every LVGL calls must be protected with these lock/unlock commands:
+所有对 LVGL 的调用都必须用以下加锁/解锁命令保护：
 ``` c
 	/* Wait for the other task done the screen operation */
     lvgl_port_lock(0);
@@ -248,12 +248,12 @@ Every LVGL calls must be protected with these lock/unlock commands:
     lvgl_port_unlock();
 ```
 
-### Rotating screen
+### 屏幕旋转
 
-LVGL port supports rotation of the display. You can select whether you'd like software rotation or hardware rotation.
-Software rotation requires no additional logic in your `flush_cb` callback.
+LVGL 端口支持显示屏旋转。你可以选择软件旋转或硬件旋转。
+使用软件旋转时，无需在 `flush_cb` 回调中加入额外逻辑。
 
-Rotation mode can be selected in the `lvgl_port_display_cfg_t` structure.
+可在 `lvgl_port_display_cfg_t` 结构体中选择旋转模式：
 ``` c
     const lvgl_port_display_cfg_t disp_cfg = {
         ...
@@ -263,21 +263,21 @@ Rotation mode can be selected in the `lvgl_port_display_cfg_t` structure.
         }
     }
 ```
-Display rotation can be changed at runtime.
+运行时也可以更改显示方向。
 
 ``` c
     lv_disp_set_rotation(disp_handle, LV_DISP_ROT_90);
 ```
 
 > [!NOTE]
-> Software rotation consumes more RAM. Software rotation uses [PPA](https://docs.espressif.com/projects/esp-idf/en/latest/esp32p4/api-reference/peripherals/ppa.html) if available on the chip (e.g. ESP32P4).
+> 软件旋转会消耗更多 RAM。若芯片支持（例如 ESP32P4），软件旋转会使用 [PPA](https://docs.espressif.com/projects/esp-idf/en/latest/esp32p4/api-reference/peripherals/ppa.html)。
 
 > [!NOTE]
-> During the hardware rotating, the component call [`esp_lcd`](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/lcd.html) API. When using software rotation, you cannot use neither `direct_mode` nor `full_refresh` in the driver. See [LVGL documentation](https://docs.lvgl.io/8.3/porting/display.html?highlight=sw_rotate) for more info.
+> 硬件旋转期间，组件会调用 [`esp_lcd`](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/lcd.html) API。使用软件旋转时，驱动中不可启用 `direct_mode` 和 `full_refresh`。详见 [LVGL 文档](https://docs.lvgl.io/8.3/porting/display.html?highlight=sw_rotate)。
 
-### Using PSRAM canvas
+### 使用 PSRAM 画布
 
-If the SRAM is insufficient, you can use the PSRAM as a canvas and use a small trans_buffer to carry it, this makes drawing more efficient.
+当 SRAM 不足时，可以把 PSRAM 用作画布，并使用较小的 trans_buffer 进行传输，这样绘制更高效。
 ``` c
     const lvgl_port_display_cfg_t disp_cfg = {
         ...
@@ -291,9 +291,9 @@ If the SRAM is insufficient, you can use the PSRAM as a canvas and use a small t
     }
 ```
 
-### Generating images (C Array)
+### 生成图片（C 数组）
 
-Images can be generated during build by adding these lines to end of the main CMakeLists.txt:
+在构建期间可生成图片的 C 数组，只需在主 CMakeLists.txt 末尾添加如下几行：
 ```
 # Generate C array for each image
 lvgl_port_create_c_image("images/logo.png" "images/" "ARGB8888" "NONE")
@@ -302,65 +302,65 @@ lvgl_port_create_c_image("images/image.png" "images/" "ARGB8888" "NONE")
 lvgl_port_add_images(${COMPONENT_LIB} "images/")
 ```
 
-Usage of create C image function:
+创建 C 图片函数的用法：
 ```
 lvgl_port_create_c_image(input_image output_folder color_format compression)
 ```
 
-Available color formats:
+可用的颜色格式：
 L8,I1,I2,I4,I8,A1,A2,A4,A8,ARGB8888,XRGB8888,RGB565,RGB565A8,RGB888,TRUECOLOR,TRUECOLOR_ALPHA,AUTO
 
-Available compression:
+可用的压缩算法：
 NONE,RLE,LZ4
 
 > [!NOTE]
-> Parameters `color_format` and `compression` are used only in LVGL 9.
+> 参数 `color_format` 与 `compression` 仅在 LVGL 9 中使用。
 
-## Power Saving
+## 省电
 
-The LVGL port can be optimized for power saving mode. There are two main features.
+LVGL 端口可针对省电模式进行优化，主要包括两个功能。
 
-### LVGL task sleep
+### LVGL 任务休眠
 
-For optimization power saving, the LVGL task should sleep, when it does nothing. Set `task_max_sleep_ms` to big value, the LVGL task will wait for events only.
+为提升省电效果，当 LVGL 任务无事可做时应进入休眠。将 `task_max_sleep_ms` 设为较大的值，LVGL 任务仅在有事件时被唤醒。
 
-The LVGL task can sleep till these situations:
-* LVGL display invalidate
-* LVGL animation in process
-* Touch interrupt
-* Button interrupt
-* Knob interrupt
-* USB mouse/keyboard interrupt
-* Timeout (`task_max_sleep_ms` in configuration structure)
-* User wake (by function `lvgl_port_task_wake`)
+LVGL 任务在以下情况会被唤醒：
+* LVGL 显示无效化
+* LVGL 动画进行中
+* 触摸中断
+* 按钮中断
+* 旋钮中断
+* USB 鼠标/键盘中断
+* 超时（由配置结构体中的 `task_max_sleep_ms` 控制）
+* 用户唤醒（通过 `lvgl_port_task_wake` 函数）
 
 > [!WARNING]
-> This feature is available from LVGL 9.
+> 此功能自 LVGL 9 起可用。
 
 > [!NOTE]
-> Don't forget to set the interrupt pin in LCD touch when you set a big time for sleep in `task_max_sleep_ms`.
+> 当你将 `task_max_sleep_ms` 设置为较大值时，别忘了在触摸驱动中配置中断引脚。
 
-### Stopping the timer
+### 停止定时器
 
-Timers can still work during light-sleep mode. You can stop LVGL timer before use light-sleep by function:
+在 light-sleep 模式下定时器仍可能运行。使用 light-sleep 之前，你可以通过以下函数停止 LVGL 定时器：
 
 ```
 lvgl_port_stop();
 ```
 
-and resume LVGL timer after wake by function:
+唤醒后可通过以下函数恢复 LVGL 定时器：
 
 ```
 lvgl_port_resume();
 ```
 
-## Performance
+## 性能
 
-Key feature of every graphical application is performance. Recommended settings for improving LCD performance is described in a separate document [here](docs/performance.md).
+对每个图形应用而言，性能是关键。提升 LCD 性能的推荐设置见单独文档：[这里](docs/performance.md)。
 
-### Performance monitor
+### 性能监视器
 
-For show performance monitor in LVGL9, please add these lines to sdkconfig.defaults and rebuild all.
+若要在 LVGL9 中显示性能监视器，请在 sdkconfig.defaults 中加入以下配置并重新完整构建：
 
 ```
 CONFIG_LV_USE_OBSERVER=y

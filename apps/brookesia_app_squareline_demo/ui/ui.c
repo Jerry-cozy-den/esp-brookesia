@@ -8,10 +8,11 @@
 // LVGL version: 9.1.0
 // Project name: Smart_Gadget
 
-// esp-brookesia: changed
+// esp-brookesia: changed-删了#include "ui_helpers.h"
 #include "ui.h"
 
 // esp-brookesia: changed
+//这个宏让你用统一的方式切换 LVGL 屏幕，并带有动画效果。实际调用时，只需写 _ui_screen_change(...)，就能实现带动画的屏幕切换。
 #if !defined(ESP_BROOKESIA_SQ1_4_1_LV8_3_11)
 #define _ui_screen_change(target, fademode, spd, delay, target_init) lv_scr_load_anim(*target, fademode, spd, delay, false)
 #endif
@@ -160,7 +161,7 @@ const lv_image_dsc_t *ui_imgset_weather_[3] = {&ui_img_weather_1_png, &ui_img_we
 #endif
 
 ///////////////////// ANIMATIONS ////////////////////
-// esp-brookesia: changed
+// esp-brookesia: changed-把这一段移出去了
 
 ///////////////////// FUNCTIONS ////////////////////
 void ui_event_screen_splash(lv_event_t *e)
@@ -320,7 +321,7 @@ void ui_event_startevents____initial_actions0(lv_event_t *e)
 
 ///////////////////// SCREENS ////////////////////
 
-// esp-brookesia: changed
+// esp-brookesia: changed-改了名称
 void phone_app_squareline_ui_init(void)
 {
     lv_display_t *dispp = lv_display_get_default();

@@ -13,7 +13,7 @@
 #include "bsp/display.h"
 #include "bsp/touch.h"
 #include "esp_brookesia.hpp"
-#include "esp_brookesia_app_squareline_demo.hpp"
+#include "esp_brookesia_app_squareline_jerry_demo.hpp"
 #include "esp_brookesia_app_game_2048_phone.hpp"  // 2048游戏应用 (Phone版本)
 
 using namespace esp_brookesia::apps;

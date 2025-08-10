@@ -6,9 +6,9 @@ dependencies:
     version: "*"
     override_path: "../../../../core/brookesia_core"
 
-  brookesia_app_squareline_demo:
+  brookesia_app_squareline_jerry:
     version: "*"
-    override_path: "../../../../apps/brookesia_app_squareline_demo"
+    override_path: "../../../../apps/brookesia_app_squareline_jerry"
     
   brookesia_app_game_2048_phone:
     version: "*"
