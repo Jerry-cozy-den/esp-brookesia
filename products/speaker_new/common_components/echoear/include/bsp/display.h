@@ -13,6 +13,20 @@
  *
  * For standard LCD initialization with LVGL graphical library, you can call all-in-one function bsp_display_start().
  */
+//极新屏幕配置
+/*cd_sda3-io44
+lcd_sda2-io43
+lcd_sda1-io6
+lcd_sda0-io0
+lcd_scl-io1
+lcd_dc-io2
+lcd_cs-io46
+lcd_te-io5
+//lcd-mosi-io0//没有了
+//lcd_rst-io//不用
+//lcd_blk-//不用
+//tp_int-io(触摸中断)//不用
+*/
 
 #pragma once
 #include "esp_lcd_types.h"

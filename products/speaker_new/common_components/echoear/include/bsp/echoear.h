@@ -24,6 +24,44 @@
 #include "lvgl.h"
 #include "esp_lvgl_port.h"
 #include "bsp/display.h"
+//极新屏幕配置
+/*cd_sda3-io44
+lcd_sda2-io43
+lcd_sda1-io6
+lcd_sda0-io0
+lcd_scl-io1
+lcd_dc-io2
+lcd_cs-io46
+lcd_te-io5
+//lcd-mosi-io0//没有了
+//lcd_rst-io//不用
+//lcd_blk-//不用
+//tp_int-io(触摸中断)//不用
+极星摄像头配置
+DVP_D0-io13数据位0（LSB）
+DVP_D1-io47数据位1
+DVP_D2-io14数据位2
+DVP_D3-io3数据位3
+DVP_D4-io12数据位4
+DVP_D5-io42数据位5
+DVP_D6-io41数据位6
+DVP_D7-io39数据位7（MSB）
+DVP_VSYNC-io21
+DVP_HREF-io437
+DVP_PCLK-io11	像素时钟
+DVP_XCLK-io40 	摄像头主时钟输入（通常24MHz）
+
+//电源	BAT-meas-adc-io6//没有
+音频
+I2S_MCK-IO16ES7210-smclk
+I2S_DI-IO10ES7210-sdout
+I2S_BCK-IO9ES7210-sclk
+I2S_WS-IO45ES7210-lrck
+I2S_DO-IO8（）COZE-DSDIN
+pa-ctrl-静音引脚-io48
+sda-io17
+scl-io18
+*/
 
 /**************************************************************************************************
  *  BSP 硬件功能支持定义
@@ -44,19 +82,21 @@
 /* I2C 总线配置
  * EchoEar开发板使用I2C总线连接多个外设设备
  */
-#define BSP_I2C_SCL (GPIO_NUM_1) /*!< I2C时钟线 (SCL) GPIO引脚 */
-#define BSP_I2C_SDA (GPIO_NUM_2) /*!< I2C数据线 (SDA) GPIO引脚 */
+#define BSP_I2C_SCL (GPIO_NUM_18) /*!< I2C时钟线 (SCL) GPIO引脚 */
+#define BSP_I2C_SDA (GPIO_NUM_17) /*!< I2C数据线 (SDA) GPIO引脚 */
 
 /* 音频系统接口配置
  * EchoEar智能音箱的音频系统采用I2S数字音频接口
  * 连接ES8311 DAC编解码器和ES7210 ADC模数转换器
  */
-#define BSP_I2S_SCLK (GPIO_NUM_40)          /*!< I2S位时钟 (BCLK) - 数字音频位同步时钟 */
-#define BSP_I2S_MCLK (GPIO_NUM_42)          /*!< I2S主时钟 (MCLK) - 音频编解码器主时钟 */
-#define BSP_I2S_LCLK (GPIO_NUM_39)          /*!< I2S帧时钟 (WS/LRCLK) - 左右声道选择时钟 */
-#define BSP_I2S_DOUT (GPIO_NUM_41)          /*!< I2S数据输出 - 连接到ES8311编解码器 */
-#define BSP_I2S_DSIN_V1_0 (GPIO_NUM_15)     /*!< I2S数据输入 (V1.0版本) - 来自ES7210 ADC */
-#define BSP_I2S_DSIN_V1_2 (GPIO_NUM_3)      /*!< I2S数据输入 (V1.2版本) - 来自ES7210 ADC */
+#define BSP_I2S_SCLK (GPIO_NUM_9)          /*!< I2S位时钟 (BCLK) - 数字音频位同步时钟 */
+#define BSP_I2S_MCLK (GPIO_NUM_16)          /*!< I2S主时钟 (MCLK) - 音频编解码器主时钟 */
+#define BSP_I2S_LCLK (GPIO_NUM_45)          /*!< I2S帧时钟 (WS/LRCLK) - 左右声道选择时钟 */
+
+#define BSP_I2S_DOUT (GPIO_NUM_10)          /*!< I2S数据输出 - 连接到ES8311编解码器 */
+#define BSP_I2S_DSIN_V1_0 (GPIO_NUM_8)     /*!< I2S数据输入 (V1.0版本) - 来自ES7210 ADC */
+#define BSP_I2S_DSIN_V1_2 (GPIO_NUM_8)      /*!< I2S数据输入 (V1.2版本) - 来自ES7210 ADC */
+//没有了
 #define BSP_POWER_AMP_IO_V1_0 (GPIO_NUM_4)  /*!< 功率放大器使能 (V1.0版本) - 控制扬声器放大器 */
 #define BSP_POWER_AMP_IO_V1_2 (GPIO_NUM_15) /*!< 功率放大器使能 (V1.2版本) - 控制扬声器放大器 */
 
@@ -64,19 +104,23 @@
  * EchoEar开发板配备2.4寸彩色LCD显示屏，使用SPI接口通信
  * 支持触控功能，采用CST816S触控芯片
  */
-#define BSP_LCD_DATA3 (GPIO_NUM_12)           /*!< LCD SPI数据线3 (SPI QSPI模式) */
-#define BSP_LCD_DATA2 (GPIO_NUM_11)           /*!< LCD SPI数据线2 (SPI QSPI模式) */
-#define BSP_LCD_DATA1 (GPIO_NUM_13)           /*!< LCD SPI数据线1 (MOSI) */
-#define BSP_LCD_DATA0 (GPIO_NUM_46)           /*!< LCD SPI数据线0 (MISO) */
-#define BSP_LCD_PCLK (GPIO_NUM_18)            /*!< LCD SPI时钟线 (SCLK) */
-#define BSP_LCD_CS (GPIO_NUM_14)              /*!< LCD SPI片选信号 (CS) */
-#define BSP_LCD_DC (GPIO_NUM_45)              /*!< LCD数据/命令选择信号 (DC) */
+#define BSP_LCD_DATA3 (GPIO_NUM_44)           /*!< LCD SPI数据线3 (SPI QSPI模式) */
+#define BSP_LCD_DATA2 (GPIO_NUM_43)           /*!< LCD SPI数据线2 (SPI QSPI模式) */
+#define BSP_LCD_DATA1 (GPIO_NUM_6)           /*!< LCD SPI数据线1 (MOSI) */
+#define BSP_LCD_DATA0 (GPIO_NUM_0)           /*!< LCD SPI数据线0 (MISO) */
+#define BSP_LCD_PCLK (GPIO_NUM_1)            /*!< LCD SPI时钟线 (SCLK) */
+#define BSP_LCD_CS (GPIO_NUM_46)              /*!< LCD SPI片选信号 (CS) */
+#define BSP_LCD_DC (GPIO_NUM_2)              /*!< LCD数据/命令选择信号 (DC) */
+//没有了
 #define BSP_LCD_RST_V1_0 (GPIO_NUM_3)         /*!< LCD复位信号 (V1.0版本) */
 #define BSP_LCD_RST_V1_2 (GPIO_NUM_47)        /*!< LCD复位信号 (V1.2版本) */
+//没有了
 #define LCD_BACKLIIGHT_CHANNEL LEDC_CHANNEL_1 /*!< LCD背光PWM通道 (LEDC通道1) */
 #define BSP_LCD_BACKLIGHT (GPIO_NUM_44)       /*!< LCD背光控制GPIO - PWM亮度调节 */
+//没有了
 #define BSP_LCD_TOUCH_INT (GPIO_NUM_10)       /*!< 触控中断信号 - 检测触摸事件 */
 
+//没有了
 /* 电源管理配置 */
 #define BSP_POWER_OFF (GPIO_NUM_9) /*!< 系统电源关闭控制信号 */
 
@@ -84,13 +128,43 @@
  * EchoEar支持microSD卡扩展存储，使用SDMMC接口
  * 可存储音乐文件、配置文件等数据
  */
-#define BSP_SD_D0 (GPIO_NUM_17)  /*!< SD卡数据线0 (SDMMC_D0) */
-#define BSP_SD_CMD (GPIO_NUM_38) /*!< SD卡命令线 (SDMMC_CMD) */
-#define BSP_SD_CLK (GPIO_NUM_16) /*!< SD卡时钟线 (SDMMC_CLK) */
+#define BSP_SD_D0 (GPIO_NUM_4)  /*!< SD卡数据线0 (SDMMC_D0) */
+#define BSP_SD_CMD (GPIO_NUM_7) /*!< SD卡命令线 (SDMMC_CMD) */
+#define BSP_SD_CLK (GPIO_NUM_15) /*!< SD卡时钟线 (SDMMC_CLK) */
+/* 摄像头接口配置
+ * EchoEar支持DVP接口的摄像头模块
+ * 可用于图像采集、视频通话等应用
+DVP_D0-io13数据位0（LSB）
+DVP_D1-io47数据位1
+DVP_D2-io14数据位2
+DVP_D3-io3数据位3
+DVP_D4-io12数据位4
+DVP_D5-io42数据位5
+DVP_D6-io41数据位6
+DVP_D7-io39数据位7（MSB）
+DVP_VSYNC-io21
+DVP_HREF-io37
+DVP_PCLK-io11	像素时钟
+DVP_XCLK-io40 	摄像头主时钟输入（通常24MHz）
+*/
+#define BSP_CAM_D0 (GPIO_NUM_13)    /*!< 摄像头数据位0 (DVP_D0) */
+#define BSP_CAM_D1 (GPIO_NUM_47)    /*!< 摄像头数据位1 (DVP_D1) */
+#define BSP_CAM_D2 (GPIO_NUM_14)    /*!< 摄像头数据位2 (DVP_D2) */
+#define BSP_CAM_D3 (GPIO_NUM_3)     /*!< 摄像头数据位3 (DVP_D3) */
+#define BSP_CAM_D4 (GPIO_NUM_12)    /*!< 摄像头数据位4 (DVP_D4) */
+#define BSP_CAM_D5 (GPIO_NUM_42)    /*!< 摄像头数据位5 (DVP_D5) */
+#define BSP_CAM_D6 (GPIO_NUM_41)    /*!< 摄像头数据位6 (DVP_D6) */
+#define BSP_CAM_D7 (GPIO_NUM_39)    /*!< 摄像头数据位7 (DVP_D7) */
+#define BSP_CAM_VSYNC (GPIO_NUM_21) /*!< 摄像头垂直同步信号 (DVP_VSYNC) */
+#define BSP_CAM_HREF (GPIO_NUM_37)  /*!< 摄像头水平参考信号 (DVP_HREF) */
+#define BSP_CAM_PCLK (GPIO_NUM_11)  /*!< 摄像头像素时钟信号 (DVP_PCLK) */
+#define BSP_CAM_XCLK (GPIO_NUM_40)  /*!< 摄像头主时钟输入 (DVP_XCLK) */
 
 /* 其他接口配置
  * 包括调试UART、触控扩展接口等
  */
+
+//没有了
 #define BSP_UART1_TX_V1_0 (GPIO_NUM_6)    /*!< UART1发送引脚 (V1.0版本) - 调试串口 */
 #define BSP_UART1_TX_V1_2 (GPIO_NUM_5)    /*!< UART1发送引脚 (V1.2版本) - 调试串口 */
 #define BSP_UART1_RX_V1_0 (GPIO_NUM_5)    /*!< UART1接收引脚 (V1.0版本) - 调试串口 */
