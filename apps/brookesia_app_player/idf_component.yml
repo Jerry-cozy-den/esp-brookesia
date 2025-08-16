@@ -1,0 +1,13 @@
+version: 0.6.0
+dependencies:
+  brookesia_core:
+    override_path: "../../core/brookesia_core"
+    public: true
+
+  espressif/esp-lib-utils:
+    version: "0.2.*"
+    public: false
+
+  espressif/esp_new_jpeg:
+    version: "0.6.*"
+    public: false

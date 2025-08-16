@@ -68,6 +68,7 @@
 #include "esp_brookesia_app_ai_profile.hpp"  // AI配置应用：AI助手个性化设置
 #include "esp_brookesia_app_game_2048.hpp"   // 2048游戏应用：经典数字游戏
 #include "esp_brookesia_app_calculator.hpp"  // 计算器应用：基础数学运算工具
+#include "esp_brookesia_app_Player.hpp"  // 计算器应用：基础数学运算工具
 #include "esp_brookesia_app_timer.hpp"       // 定时器应用：倒计时和提醒功能
 
 // ==================== 工具库和自定义组件头文件 ====================
@@ -1308,6 +1309,12 @@ static bool create_speaker_and_install_apps()
     auto app_calculator_id = speaker->installApp(app_calculator);
     ESP_UTILS_CHECK_FALSE_RETURN(speaker->checkAppID_Valid(app_calculator_id), false, "Install calculator app failed");
 
+    /* Install Player app */
+    Player *app_Player = nullptr;
+    ESP_UTILS_CHECK_EXCEPTION_RETURN(app_Player = new Player(), false, "Create Player app failed");
+    auto app_Player_id = speaker->installApp(app_Player);
+    ESP_UTILS_CHECK_FALSE_RETURN(speaker->checkAppID_Valid(app_Player_id), false, "Install Player app failed");
+
     /* Install timer app */
     auto app_timer = Timer::requestInstance();
     ESP_UTILS_CHECK_NULL_RETURN(app_timer, false, "Get timer app failed");
@@ -1327,6 +1334,7 @@ static bool create_speaker_and_install_apps()
             {app_settings_id, {app_settings->getName(), "setting", "settings", "设置", "设置应用", "设置app"}},
             {app_game_2048_id, {app_game_2048->getName(), "2048", "game", "游戏", "2048游戏", "2048app"}},
             {app_calculator_id, {app_calculator->getName(), "calculator", "calc", "计算器", "计算器应用", "计算器app"}},
+            {app_Player_id, {app_Player->getName(), "Player",  "徽章"}},
             {app_ai_profile_id, {app_ai_profile->getName(), "AI profile", "ai 配置", "ai配置", "ai设置", "ai设置应用", "ai设置app"}},
             {app_timer_id, {app_timer->getName(), "timer", "时钟", "时钟应用", "时钟app"}}
         };
