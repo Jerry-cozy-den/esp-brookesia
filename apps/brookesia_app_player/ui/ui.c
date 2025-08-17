@@ -4,7 +4,9 @@
 // Project name: SquareLine_Project
 
 #include "ui.h"
-#include "ui_helpers.h"
+
+// 定义屏幕切换宏
+#define _ui_screen_change(target, fademode, spd, delay, target_init) lv_scr_load_anim(*target, fademode, spd, delay, false)
 
 ///////////////////// VARIABLES ////////////////////
 
@@ -46,55 +48,125 @@ const lv_image_dsc_t * ui_imgset_[3] = {&ui_img_1_png, &ui_img_2_png, &ui_img_3_
 void ui_event_Screen_Screen1(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
+    
+    // 添加调试信息
+    printf("Screen1 event triggered: %d\n", event_code);
 
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
+        printf("Screen1: Left gesture detected\n");
         lv_indev_wait_release(lv_indev_active());
         _ui_screen_change(&ui_Screen_Screen2, LV_SCR_LOAD_ANIM_FADE_ON, 300, 0, &ui_Screen_Screen2_screen_init);
     }
     if(event_code == LV_EVENT_SHORT_CLICKED) {
+        printf("Screen1: Short click detected\n");
         player_1(e);
+    }
+    if(event_code == LV_EVENT_CLICKED) {
+        printf("Screen1: Click detected - Switching to Screen2\n");
+        // 添加点击切换屏幕功能
+        printf("Calling _ui_screen_change to Screen2...\n");
+        _ui_screen_change(&ui_Screen_Screen2, LV_SCR_LOAD_ANIM_FADE_ON, 300, 0, &ui_Screen_Screen2_screen_init);
+        printf("Screen change call completed\n");
+        player_1(e);
+    }
+    if(event_code == LV_EVENT_PRESSED) {
+        printf("Screen1: Press detected\n");
+    }
+    if(event_code == LV_EVENT_RELEASED) {
+        printf("Screen1: Release detected\n");
     }
 }
 
 void ui_event_Screen_Screen2(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
+    
+    // 添加调试信息
+    printf("Screen2 event triggered: %d\n", event_code);
 
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
+        printf("Screen2: Left gesture detected\n");
         lv_indev_wait_release(lv_indev_active());
         _ui_screen_change(&ui_Screen_Screen3, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen3_screen_init);
     }
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
+        printf("Screen2: Right gesture detected\n");
         lv_indev_wait_release(lv_indev_active());
         _ui_screen_change(&ui_Screen_Screen1, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen1_screen_init);
         player_2(e);
+    }
+    if(event_code == LV_EVENT_CLICKED) {
+        printf("Screen2: Click detected - Switching to Screen3\n");
+        // 添加点击切换屏幕功能
+        printf("Calling _ui_screen_change to Screen3...\n");
+        _ui_screen_change(&ui_Screen_Screen3, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen3_screen_init);
+        printf("Screen change call completed\n");
+        player_2(e);
+    }
+    if(event_code == LV_EVENT_PRESSED) {
+        printf("Screen2: Press detected\n");
+    }
+    if(event_code == LV_EVENT_RELEASED) {
+        printf("Screen2: Release detected\n");
     }
 }
 
 void ui_event_Screen_Screen3(lv_event_t * e)
 {
     lv_event_code_t event_code = lv_event_get_code(e);
-
+    
+    // 添加调试信息
+    printf("Screen3 event triggered: %d\n", event_code);
+    
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
+        printf("Screen3: Right gesture detected\n");
         lv_indev_wait_release(lv_indev_active());
         _ui_screen_change(&ui_Screen_Screen2, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen2_screen_init);
     }
     if(event_code == LV_EVENT_CLICKED) {
+        printf("Screen3: Click detected - Switching to Screen1\n");
+        // 添加点击切换屏幕功能
+        printf("Calling _ui_screen_change to Screen1...\n");
+        _ui_screen_change(&ui_Screen_Screen1, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen1_screen_init);
+        printf("Screen change call completed\n");
         player_3(e);
+    }
+    if(event_code == LV_EVENT_PRESSED) {
+        printf("Screen3: Press detected\n");
+    }
+    if(event_code == LV_EVENT_RELEASED) {
+        printf("Screen3: Release detected\n");
     }
 }
 
 ///////////////////// SCREENS ////////////////////
 
-void ui_init(void)
+void player_ui_init(void)
 {
     lv_disp_t * dispp = lv_display_get_default();
     lv_theme_t * theme = lv_theme_default_init(dispp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
                                                false, LV_FONT_DEFAULT);
     lv_disp_set_theme(dispp, theme);
+    
+    // 添加调试信息
+    printf("Player UI initializing...\n");
+    
+    // 检查输入设备
+    lv_indev_t *indev = lv_indev_get_next(NULL);
+    if (indev) {
+        printf("Input device found, type: %d\n", lv_indev_get_type(indev));
+        // 检查手势设置
+        printf("Gesture min velocity: %d\n", lv_indev_get_gesture_min_velocity(indev));
+        printf("Gesture threshold: %d\n", lv_indev_get_gesture_threshold(indev));
+    } else {
+        printf("No input device found!\n");
+    }
+    
     ui_Screen_Screen1_screen_init();
     ui_Screen_Screen2_screen_init();
     ui_Screen_Screen3_screen_init();
     ui_Startevents____initial_actions0 = lv_obj_create(NULL);
     lv_disp_load_scr(ui_Screen_Screen1);
+    
+    printf("Player UI initialization complete, starting with Screen1\n");
 }

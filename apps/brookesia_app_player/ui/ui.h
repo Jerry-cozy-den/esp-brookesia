@@ -59,7 +59,7 @@ LV_FONT_DECLARE(ui_font_mi);
 LV_FONT_DECLARE(ui_font_zhinengxiyanqi);
 
 // UI INIT
-void ui_init(void);
+void player_ui_init(void);
 
 #ifdef __cplusplus
 } /*extern "C"*/

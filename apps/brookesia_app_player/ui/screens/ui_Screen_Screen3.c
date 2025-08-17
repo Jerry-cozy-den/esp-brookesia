@@ -12,6 +12,13 @@ void ui_Screen_Screen3_screen_init(void)
     lv_obj_set_style_bg_image_src(ui_Screen_Screen3, &ui_img_3_png, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_image_opa(ui_Screen_Screen3, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    lv_obj_add_event_cb(ui_Screen_Screen3, ui_event_Screen_Screen3, LV_EVENT_ALL, NULL);
+    // 确保对象可以接收点击事件
+    lv_obj_add_flag(ui_Screen_Screen3, LV_OBJ_FLAG_CLICKABLE);
+    
+    // 添加更具体的事件监听，而不是 LV_EVENT_ALL
+    lv_obj_add_event_cb(ui_Screen_Screen3, ui_event_Screen_Screen3, LV_EVENT_CLICKED, NULL);
+    lv_obj_add_event_cb(ui_Screen_Screen3, ui_event_Screen_Screen3, LV_EVENT_GESTURE, NULL);
+    lv_obj_add_event_cb(ui_Screen_Screen3, ui_event_Screen_Screen3, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(ui_Screen_Screen3, ui_event_Screen_Screen3, LV_EVENT_RELEASED, NULL);
 
 }
