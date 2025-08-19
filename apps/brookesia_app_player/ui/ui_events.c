@@ -12,12 +12,27 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <strings.h>  // for strcasecmp
+#include <stdbool.h>  // for bool type
+
+// 函数前向声明
+static bool safe_file_exists(const char *filepath);
+static lv_image_dsc_t * create_image_from_sd_jpeg(const char * file_path);
+static void show_photo_overlay(const lv_image_dsc_t * photo_img);
+static bool check_sd_card_status(void);
 
 // 全局变量，用于管理照片显示
 static lv_obj_t * photo_overlay = NULL;
 static lv_timer_t * photo_timer = NULL;
 static lv_image_dsc_t * dynamic_img_dsc = NULL;
 static uint8_t * dynamic_img_data = NULL;
+
+// 动画播放相关全局变量
+static lv_timer_t * animation_timer = NULL;
+static lv_obj_t * animation_img_obj = NULL;
+static int current_frame = 0;
+static int total_frames = 0;
+static char animation_base_path[256];
+static bool is_animation_playing = false;
 
 // 定时器回调函数，用于关闭照片显示
 static void photo_timer_cb(lv_timer_t * timer)
@@ -39,6 +54,145 @@ static void photo_timer_cb(lv_timer_t * timer)
         jpeg_free_align(dynamic_img_data);
         dynamic_img_data = NULL;
     }
+}
+
+// 动画定时器回调函数
+static void animation_timer_cb(lv_timer_t * timer)
+{
+    if (!is_animation_playing || !animation_img_obj) {
+        return;
+    }
+    
+    current_frame++;
+    
+    // 检查是否播放完成
+    if (current_frame > total_frames) {
+        printf("🎬 动画播放完成，返回背景图\n");
+        
+        // 停止动画
+        is_animation_playing = false;
+        if (animation_timer) {
+            lv_timer_delete(animation_timer);
+            animation_timer = NULL;
+        }
+        
+        // 关闭覆盖层
+        if (photo_overlay) {
+            lv_obj_delete(photo_overlay);
+            photo_overlay = NULL;
+        }
+        animation_img_obj = NULL;
+        
+        // 释放动态图像数据
+        if (dynamic_img_dsc) {
+            free(dynamic_img_dsc);
+            dynamic_img_dsc = NULL;
+        }
+        if (dynamic_img_data) {
+            jpeg_free_align(dynamic_img_data);
+            dynamic_img_data = NULL;
+        }
+        
+        return;
+    }
+    
+    // 构建当前帧的文件路径
+    char frame_path[512];
+    snprintf(frame_path, sizeof(frame_path), "%s/Image%d.jpg", animation_base_path, current_frame);
+    
+    printf("🎞️ 播放第 %d/%d 帧: %s\n", current_frame, total_frames, frame_path);
+    
+    // 加载并显示当前帧
+    lv_image_dsc_t * frame_img = create_image_from_sd_jpeg(frame_path);
+    if (frame_img && animation_img_obj) {
+        lv_image_set_src(animation_img_obj, frame_img);
+    } else {
+        printf("❌ 加载第 %d 帧失败\n", current_frame);
+    }
+}
+
+// 获取动画文件夹中的图片数量
+static int get_animation_frame_count(const char * folder_path)
+{
+    int max_frame = 0;
+    char test_path[512];
+    
+    // 从 1 开始测试，找到最大的图片编号
+    for (int i = 1; i <= 200; i++) {  // 最多检查200张图片
+        snprintf(test_path, sizeof(test_path), "%s/Image%d.jpg", folder_path, i);
+        if (safe_file_exists(test_path)) {
+            max_frame = i;
+        } else {
+            // 连续几个文件不存在就认为结束了
+            bool found_next = false;
+            for (int j = i + 1; j <= i + 5 && j <= 200; j++) {
+                snprintf(test_path, sizeof(test_path), "%s/Image%d.jpg", folder_path, j);
+                if (safe_file_exists(test_path)) {
+                    found_next = true;
+                    break;
+                }
+            }
+            if (!found_next) {
+                break;
+            }
+        }
+    }
+    
+    printf("📊 检测到动画帧数: %d\n", max_frame);
+    return max_frame;
+}
+
+// 开始播放动画
+static void start_animation(const char * folder_path)
+{
+    printf("\n🎬 开始播放动画: %s\n", folder_path);
+    
+    // 停止之前的动画或照片显示
+    if (animation_timer) {
+        lv_timer_delete(animation_timer);
+        animation_timer = NULL;
+    }
+    if (photo_timer) {
+        lv_timer_delete(photo_timer);
+        photo_timer = NULL;
+    }
+    if (photo_overlay) {
+        lv_obj_delete(photo_overlay);
+        photo_overlay = NULL;
+    }
+    
+    // 获取动画帧数
+    total_frames = get_animation_frame_count(folder_path);
+    if (total_frames <= 0) {
+        printf("❌ 动画文件夹中没有找到图片文件\n");
+        return;
+    }
+    
+    // 保存基础路径
+    strncpy(animation_base_path, folder_path, sizeof(animation_base_path) - 1);
+    animation_base_path[sizeof(animation_base_path) - 1] = '\0';
+    
+    // 创建覆盖层
+    photo_overlay = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(photo_overlay, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_pos(photo_overlay, 0, 0);
+    lv_obj_remove_flag(photo_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_opa(photo_overlay, LV_OPA_80, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(photo_overlay, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_border_width(photo_overlay, 0, LV_PART_MAIN);
+    
+    // 创建图片对象
+    animation_img_obj = lv_image_create(photo_overlay);
+    lv_obj_center(animation_img_obj);
+    
+    // 加载第一帧
+    current_frame = 0;  // 将在定时器回调中递增到1
+    is_animation_playing = true;
+    
+    // 创建动画定时器，30ms间隔（约33fps，接近0.03s）
+    animation_timer = lv_timer_create(animation_timer_cb, 30, NULL);
+    
+    printf("🎯 动画设置完成，总帧数: %d\n", total_frames);
 }
 
 // 简化的SD卡状态检查函数
@@ -304,7 +458,7 @@ static void show_photo_overlay(const lv_image_dsc_t * photo_img)
 
 void player_1(lv_event_t * e)
 {
-    printf("\n🎯 Player 1 触发 - 尝试从SD卡加载图片\n");
+    printf("\n🎯 Player 1 触发 - 播放1-long动画\n");
     
     // 首先检查SD卡状态
     if (!check_sd_card_status()) {
@@ -318,62 +472,114 @@ void player_1(lv_event_t * e)
         return;
     }
     
-    // 简化的图像文件搜索
-    find_simple_image_files();
+    // 动画文件夹路径
+    const char * animation_folder = "/sdcard/player/1-long/360jpg";
     
-    // 更保守的路径尝试列表 - 减少嵌套目录访问
-    const char *possible_paths[] = {
-        "/sdcard/player/1-long/360jpg/Image50.jpg",
-        NULL  // 结束标记
-    };
-    
-    lv_image_dsc_t * sd_img = NULL;
-    const char * successful_path = NULL;
-    
-    printf("🔍 尝试加载图片文件...\n");
-    
-    for (int i = 0; possible_paths[i] != NULL; i++) {
-        printf("📝 尝试路径 %d: %s\n", i+1, possible_paths[i]);
-        
-        // 使用安全的文件存在检查
-        if (safe_file_exists(possible_paths[i])) {
-            printf("✅ 文件存在，尝试读取和解码...\n");
-            sd_img = create_image_from_sd_jpeg(possible_paths[i]);
-            if (sd_img) {
-                successful_path = possible_paths[i];
-                printf("🎉 成功解码图片！\n");
-                break;
-            } else {
-                printf("❌ 文件存在但解码失败\n");
-            }
-        } else {
-            printf("❌ 文件不存在\n");
-        }
-    }
-    
-    if (sd_img && successful_path) {
-        printf("🖼️ 成功使用路径: %s\n", successful_path);
-        show_photo_overlay(sd_img);
-    } else {
-        printf("⚠️ 无法从SD卡加载图片，使用默认图片\n");
-        printf("💡 建议:\n");
-        printf("   1. 将一个JPEG图片重命名为 'Image50.jpg' 并放在SD卡根目录\n");
-        printf("   2. 确保图片不超过1MB大小\n");
-        printf("   3. 使用标准JPEG格式（非渐进式JPEG）\n");
+    // 检查动画文件夹是否存在
+    struct stat st;
+    if (stat(animation_folder, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        printf("❌ 动画文件夹不存在: %s\n", animation_folder);
+        printf("� 建议:\n");
+        printf("   1. 确保SD卡中存在 player/1-long/360jpg 文件夹\n");
+        printf("   2. 检查文件夹路径是否正确\n");
+        printf("   3. 确保文件夹中包含 Image1.jpg, Image2.jpg 等文件\n");
         show_photo_overlay(&ui_img_1_png);
+        return;
     }
     
-    printf("✨ Player 1 处理完成\n\n");
+    printf("✅ 找到动画文件夹: %s\n", animation_folder);
+    
+    // 快速检查是否有图片文件
+    char test_path[512];
+    snprintf(test_path, sizeof(test_path), "%s/Image1.jpg", animation_folder);
+    
+    if (!safe_file_exists(test_path)) {
+        printf("❌ 动画文件夹中没有找到 Image1.jpg\n");
+        printf("💡 建议:\n");
+        printf("   1. 确保图片文件命名为 Image1.jpg, Image2.jpg, ...\n");
+        printf("   2. 检查图片文件是否完整\n");
+        show_photo_overlay(&ui_img_1_png);
+        return;
+    }
+    
+    // 开始播放动画
+    start_animation(animation_folder);
+    
+    printf("✨ Player 1 动画启动完成\n\n");
 }
 
 void player_2(lv_event_t * e)
 {
-    // 显示第二张照片（使用现有的图片资源）
-    show_photo_overlay(&ui_img_2_png);
+    printf("\n🎯 Player 2 触发 - 播放2-kunkun动画\n");
+    
+    // 首先检查SD卡状态
+    if (!check_sd_card_status()) {
+        printf("❌ SD卡状态检查失败，使用默认图片\n");
+        show_photo_overlay(&ui_img_2_png);
+        return;
+    }
+    
+    // 动画文件夹路径
+    const char * animation_folder = "/sdcard/player/2-kunkun/360jpg";
+    
+    // 检查动画文件夹是否存在
+    struct stat st;
+    if (stat(animation_folder, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        printf("❌ 动画文件夹不存在: %s，使用默认图片\n", animation_folder);
+        show_photo_overlay(&ui_img_2_png);
+        return;
+    }
+    
+    // 快速检查是否有图片文件
+    char test_path[512];
+    snprintf(test_path, sizeof(test_path), "%s/Image1.jpg", animation_folder);
+    
+    if (!safe_file_exists(test_path)) {
+        printf("❌ 动画文件夹中没有找到 Image1.jpg，使用默认图片\n");
+        show_photo_overlay(&ui_img_2_png);
+        return;
+    }
+    
+    // 开始播放动画
+    start_animation(animation_folder);
+    
+    printf("✨ Player 2 动画启动完成\n\n");
 }
 
 void player_3(lv_event_t * e)
 {
-    // 显示第三张照片（使用现有的图片资源）
-    show_photo_overlay(&ui_img_3_png);
+    printf("\n🎯 Player 3 触发 - 播放3-xiaohui动画\n");
+    
+    // 首先检查SD卡状态
+    if (!check_sd_card_status()) {
+        printf("❌ SD卡状态检查失败，使用默认图片\n");
+        show_photo_overlay(&ui_img_3_png);
+        return;
+    }
+    
+    // 动画文件夹路径
+    const char * animation_folder = "/sdcard/player/3-xiaohui/360jpg";
+    
+    // 检查动画文件夹是否存在
+    struct stat st;
+    if (stat(animation_folder, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        printf("❌ 动画文件夹不存在: %s，使用默认图片\n", animation_folder);
+        show_photo_overlay(&ui_img_3_png);
+        return;
+    }
+    
+    // 快速检查是否有图片文件
+    char test_path[512];
+    snprintf(test_path, sizeof(test_path), "%s/Image1.jpg", animation_folder);
+    
+    if (!safe_file_exists(test_path)) {
+        printf("❌ 动画文件夹中没有找到 Image1.jpg，使用默认图片\n");
+        show_photo_overlay(&ui_img_3_png);
+        return;
+    }
+    
+    // 开始播放动画
+    start_animation(animation_folder);
+    
+    printf("✨ Player 3 动画启动完成\n\n");
 }
