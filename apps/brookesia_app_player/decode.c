@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdint.h>
 // #include "image_io.h"
+
 #include "decode.h"
 // 全局配置变量
 static jpeg_pixel_format_t j_type     = JPEG_PIXEL_FORMAT_RGB888;  // 输出像素格式：RGB888 (每像素3字节)
@@ -107,6 +108,113 @@ jpeg_error_t esp_jpeg_decode_one_picture(uint8_t *input_buf, int len, uint8_t **
 
     // 解码器反初始化和资源清理
 jpeg_dec_failed:
+    jpeg_dec_close(jpeg_dec);    // 关闭并释放解码器句柄
+    if (jpeg_io) {
+        free(jpeg_io);           // 释放I/O回调结构
+    }
+    if (out_info) {
+        free(out_info);          // 释放头信息结构
+    }
+    return ret;
+}
+
+/**
+ * @brief 解码单张JPEG图片并返回图像尺寸信息的增强函数
+ * 
+ * 这个函数在原有解码功能基础上，额外返回图像的宽度和高度信息，
+ * 方便调用者创建LVGL图像描述符或进行其他需要尺寸信息的操作。
+ * 
+ * @param input_buf  输入缓冲区，包含JPEG图像数据
+ * @param len        输入JPEG数据的字节长度
+ * @param output_buf 输出缓冲区指针，用于接收解码后的像素数据（由函数分配内存）
+ * @param out_len    输出数据的字节长度
+ * @param width      输出图像宽度
+ * @param height     输出图像高度
+ * @return jpeg_error_t 返回解码结果状态码
+ */
+jpeg_error_t esp_jpeg_decode_one_picture_with_info(uint8_t *input_buf, int len, uint8_t **output_buf, int *out_len, int *width, int *height)
+{
+    uint8_t *out_buf = NULL;                       // 输出缓冲区
+    jpeg_error_t ret = JPEG_ERR_OK;                // 返回值初始化
+    jpeg_dec_io_t *jpeg_io = NULL;                 // I/O回调处理结构
+    jpeg_dec_header_info_t *out_info = NULL;       // JPEG头信息结构
+
+    // 生成默认解码器配置
+    jpeg_dec_config_t config = DEFAULT_JPEG_DEC_CONFIG();
+    config.output_type = j_type;                   // 设置输出像素格式 (RGB888)
+    config.rotate = j_rotation;                    // 设置旋转角度 (0度)
+
+    // 创建 JPEG 解码器句柄
+    jpeg_dec_handle_t jpeg_dec = NULL;
+    ret = jpeg_dec_open(&config, &jpeg_dec);
+    if (ret != JPEG_ERR_OK) {
+        return ret;  // 解码器初始化失败
+    }
+
+    // 创建 I/O 回调句柄，用于管理输入输出数据
+    jpeg_io = calloc(1, sizeof(jpeg_dec_io_t));
+    if (jpeg_io == NULL) {
+        ret = JPEG_ERR_NO_MEM;  // 内存分配失败
+        goto jpeg_dec_failed_with_info;
+    }
+
+    // 创建输出信息句柄，用于存储解码后的图像信息
+    out_info = calloc(1, sizeof(jpeg_dec_header_info_t));
+    if (out_info == NULL) {
+        ret = JPEG_ERR_NO_MEM;  // 内存分配失败
+        goto jpeg_dec_failed_with_info;
+    }
+
+    // 设置输入数据缓冲区和长度到I/O回调结构
+    jpeg_io->inbuf = input_buf;          // 输入JPEG数据缓冲区
+    jpeg_io->inbuf_len = len;            // 输入数据长度
+
+    // 解析JPEG头信息，获取图像的基本属性（宽度、高度、颜色格式等）
+    ret = jpeg_dec_parse_header(jpeg_dec, jpeg_io, out_info);
+    if (ret != JPEG_ERR_OK) {
+        goto jpeg_dec_failed_with_info;  // 头解析失败，可能是损坏的JPEG文件
+    }
+
+    // 返回图像尺寸信息
+    *width = out_info->width;
+    *height = out_info->height;
+
+    // 计算输出缓冲区所需的内存大小，默认为RGB888格式（每像素3字节）
+    *out_len = out_info->width * out_info->height * 3;
+    
+    // 根据配置的输出格式调整缓冲区大小
+    if (config.output_type == JPEG_PIXEL_FORMAT_RGB565_LE
+        || config.output_type == JPEG_PIXEL_FORMAT_RGB565_BE
+        || config.output_type == JPEG_PIXEL_FORMAT_CbYCrY) {
+        // RGB565和CbYCrY格式：每像素2字节
+        *out_len = out_info->width * out_info->height * 2;
+    } else if (config.output_type == JPEG_PIXEL_FORMAT_RGB888) {
+        // RGB888格式：每像素3字节
+        *out_len = out_info->width * out_info->height * 3;
+    } else {
+        // 不支持的像素格式
+        ret = JPEG_ERR_INVALID_PARAM;
+        goto jpeg_dec_failed_with_info;
+    }
+    
+    // 分配对齐的输出缓冲区（16字节对齐，提高内存访问效率）
+    out_buf = jpeg_calloc_align(*out_len, 16);
+    if (out_buf == NULL) {
+        ret = JPEG_ERR_NO_MEM;  // 输出缓冲区内存分配失败
+        goto jpeg_dec_failed_with_info;
+    }
+    jpeg_io->outbuf = out_buf;  // 设置输出缓冲区
+    *output_buf = out_buf;      // 返回输出缓冲区地址
+
+    // 开始JPEG解码处理
+    // 这是主要的解码步骤，将JPEG数据转换为指定格式的原始像素数据
+    ret = jpeg_dec_process(jpeg_dec, jpeg_io);
+    if (ret != JPEG_ERR_OK) {
+        goto jpeg_dec_failed_with_info;  // 解码处理失败
+    }
+
+    // 解码器反初始化和资源清理
+jpeg_dec_failed_with_info:
     jpeg_dec_close(jpeg_dec);    // 关闭并释放解码器句柄
     if (jpeg_io) {
         free(jpeg_io);           // 释放I/O回调结构

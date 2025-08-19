@@ -60,6 +60,27 @@ typedef struct esp_jpeg_stream *esp_jpeg_stream_handle_t;
 jpeg_error_t esp_jpeg_decode_one_picture(uint8_t *input_buf, int len, uint8_t **output_buf, int *out_len);
 
 /**
+ * @brief 解码单张JPEG图片并返回图像尺寸信息（增强版本）
+ * 
+ * 这个函数是 esp_jpeg_decode_one_picture 的增强版本，除了解码图像数据外，
+ * 还返回图像的宽度和高度信息，方便创建LVGL图像描述符。
+ * 
+ * @note 输出缓冲区由函数内部分配，调用者需要在使用完毕后手动释放
+ * 
+ * @param  input_buf   输入缓冲区指针，包含完整的JPEG图像数据
+ * @param  len         输入缓冲区的字节长度
+ * @param  output_buf  输出缓冲区指针的指针，函数内部会分配内存并返回地址
+ * @param  out_len     实际输出数据的字节长度
+ * @param  width       输出图像宽度
+ * @param  height      输出图像高度
+ *
+ * @return
+ *       - JPEG_ERR_OK  解码成功
+ *       - 其他值        解码失败，参考 jpeg_error_t 枚举定义
+ */
+jpeg_error_t esp_jpeg_decode_one_picture_with_info(uint8_t *input_buf, int len, uint8_t **output_buf, int *out_len, int *width, int *height);
+
+/**
  * @brief 使用分块解码API解码单张JPEG图片
  * 
  * 这个函数演示了分块解码的使用方法，将大图像分割成多个

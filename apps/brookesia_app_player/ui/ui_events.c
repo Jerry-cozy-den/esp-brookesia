@@ -4,10 +4,20 @@
 // Project name: SquareLine_Project
 
 #include "ui.h"
+#include "ui_events.h"
+#include "decode.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <strings.h>  // for strcasecmp
 
 // 全局变量，用于管理照片显示
 static lv_obj_t * photo_overlay = NULL;
 static lv_timer_t * photo_timer = NULL;
+static lv_image_dsc_t * dynamic_img_dsc = NULL;
+static uint8_t * dynamic_img_data = NULL;
 
 // 定时器回调函数，用于关闭照片显示
 static void photo_timer_cb(lv_timer_t * timer)
@@ -20,6 +30,244 @@ static void photo_timer_cb(lv_timer_t * timer)
         lv_timer_delete(photo_timer);
         photo_timer = NULL;
     }
+    // 释放动态分配的图像数据
+    if (dynamic_img_dsc) {
+        free(dynamic_img_dsc);
+        dynamic_img_dsc = NULL;
+    }
+    if (dynamic_img_data) {
+        jpeg_free_align(dynamic_img_data);
+        dynamic_img_data = NULL;
+    }
+}
+
+// 简化的SD卡状态检查函数
+static bool check_sd_card_status(void)
+{
+    printf("\n=== SD卡状态检查 ===\n");
+    
+    // 检查SD卡是否挂载
+    struct stat st;
+    if (stat("/sdcard", &st) != 0) {
+        printf("❌ SD卡未挂载或 /sdcard 目录不存在\n");
+        return false;
+    }
+    
+    printf("✅ SD卡已挂载\n");
+    
+    // 尝试简单的目录访问
+    DIR *dir = opendir("/sdcard");
+    if (dir == NULL) {
+        printf("❌ 无法访问SD卡根目录\n");
+        return false;
+    }
+    
+    printf("✅ 可以访问SD卡根目录\n");
+    
+    // 快速检查是否有内容
+    struct dirent *entry;
+    int file_count = 0;
+    int dir_count = 0;
+    
+    while ((entry = readdir(dir)) != NULL && (file_count + dir_count) < 10) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        
+        char full_path[512];  // 增加缓冲区大小
+        snprintf(full_path, sizeof(full_path), "/sdcard/%s", entry->d_name);
+        
+        struct stat statbuf;
+        if (stat(full_path, &statbuf) == 0) {
+            if (S_ISDIR(statbuf.st_mode)) {
+                printf("📁 目录: %s\n", entry->d_name);
+                dir_count++;
+            } else {
+                printf("📄 文件: %s (大小: %ld 字节)\n", entry->d_name, statbuf.st_size);
+                file_count++;
+            }
+        } else {
+            printf("❓ 无法获取信息: %s\n", entry->d_name);
+        }
+    }
+    
+    closedir(dir);
+    
+    printf("📊 找到 %d 个文件和 %d 个目录\n", file_count, dir_count);
+    printf("==================\n\n");
+    
+    return true;
+}
+
+// 安全的文件存在检查函数
+static bool safe_file_exists(const char *filepath)
+{
+    struct stat st;
+    int result = stat(filepath, &st);
+    if (result != 0) {
+        return false;
+    }
+    return S_ISREG(st.st_mode);  // 确保是常规文件
+}
+
+// 简化的图像文件搜索函数 - 只搜索根目录，避免过度访问SD卡
+static void find_simple_image_files(void)
+{
+    printf("\n🔍 搜索根目录图像文件...\n");
+    
+    DIR *dir = opendir("/sdcard");
+    if (dir == NULL) {
+        printf("❌ 无法打开SD卡根目录\n");
+        return;
+    }
+    
+    struct dirent *entry;
+    int image_count = 0;
+    
+    while ((entry = readdir(dir)) != NULL && image_count < 20) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+        
+        // 检查文件扩展名
+        char *ext = strrchr(entry->d_name, '.');
+        if (ext != NULL) {
+            if (strcasecmp(ext, ".jpg") == 0 || 
+                strcasecmp(ext, ".jpeg") == 0 || 
+                strcasecmp(ext, ".png") == 0 || 
+                strcasecmp(ext, ".bmp") == 0) {
+                
+                char full_path[512];  // 增加缓冲区大小
+                snprintf(full_path, sizeof(full_path), "/sdcard/%s", entry->d_name);
+                
+                struct stat statbuf;
+                if (stat(full_path, &statbuf) == 0) {
+                    printf("🖼️ 找到图像: %s (大小: %ld 字节)\n", full_path, statbuf.st_size);
+                    image_count++;
+                }
+            }
+        }
+    }
+    
+    closedir(dir);
+    
+    if (image_count == 0) {
+        printf("❌ 根目录未找到图像文件\n");
+    } else {
+        printf("✅ 在根目录找到 %d 个图像文件\n", image_count);
+    }
+    printf("===================\n\n");
+}
+
+// 从SD卡读取JPEG文件并创建LVGL图像描述符
+static lv_image_dsc_t * create_image_from_sd_jpeg(const char * file_path)
+{
+    FILE * file = NULL;
+    uint8_t * jpeg_data = NULL;
+    uint8_t * rgb_data = NULL;
+    lv_image_dsc_t * img_dsc = NULL;
+    int jpeg_size = 0;
+    int rgb_size = 0;
+    
+    // 先释放之前的动态图像数据
+    if (dynamic_img_dsc) {
+        free(dynamic_img_dsc);
+        dynamic_img_dsc = NULL;
+    }
+    if (dynamic_img_data) {
+        jpeg_free_align(dynamic_img_data);
+        dynamic_img_data = NULL;
+    }
+    
+    // 打开SD卡上的JPEG文件
+    printf("正在尝试打开文件: %s\n", file_path);
+    file = fopen(file_path, "rb");
+    if (!file) {
+        printf("错误: 无法打开文件: %s\n", file_path);
+        printf("可能的原因:\n");
+        printf("1. 文件不存在\n");
+        printf("2. 路径错误\n");
+        printf("3. SD卡未正确挂载\n");
+        printf("4. 权限问题\n");
+        
+        // 尝试检查文件是否存在
+        struct stat file_stat;
+        if (stat(file_path, &file_stat) == 0) {
+            printf("文件存在但无法打开 (大小: %ld 字节)\n", file_stat.st_size);
+        } else {
+            printf("文件不存在或路径错误\n");
+        }
+        
+        return NULL;
+    }
+    
+    printf("文件成功打开: %s\n", file_path);
+    
+    // 获取文件大小
+    fseek(file, 0, SEEK_END);
+    jpeg_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    if (jpeg_size <= 0) {
+        printf("文件大小无效: %d\n", jpeg_size);
+        fclose(file);
+        return NULL;
+    }
+    
+    // 分配内存用于JPEG数据
+    jpeg_data = malloc(jpeg_size);
+    if (!jpeg_data) {
+        printf("无法分配JPEG数据内存\n");
+        fclose(file);
+        return NULL;
+    }
+    
+    // 读取JPEG文件数据
+    size_t bytes_read = fread(jpeg_data, 1, jpeg_size, file);
+    fclose(file);
+    
+    if (bytes_read != jpeg_size) {
+        printf("文件读取不完整: %zu/%d\n", bytes_read, jpeg_size);
+        free(jpeg_data);
+        return NULL;
+    }
+    
+    // 使用decode.c中的增强函数解码JPEG并获取尺寸信息
+    int width = 0, height = 0;
+    jpeg_error_t ret = esp_jpeg_decode_one_picture_with_info(jpeg_data, jpeg_size, &rgb_data, &rgb_size, &width, &height);
+    free(jpeg_data); // 释放JPEG原始数据
+    
+    if (ret != JPEG_ERR_OK || !rgb_data) {
+        printf("JPEG解码失败，错误码: %d\n", ret);
+        return NULL;
+    }
+    
+    // 创建LVGL图像描述符
+    img_dsc = malloc(sizeof(lv_image_dsc_t));
+    if (!img_dsc) {
+        printf("无法分配图像描述符内存\n");
+        jpeg_free_align(rgb_data);
+        return NULL;
+    }
+    
+    // 设置图像头部信息
+    img_dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+    img_dsc->header.cf = LV_COLOR_FORMAT_RGB888; // RGB888格式
+    img_dsc->header.flags = 0;
+    img_dsc->header.w = width;
+    img_dsc->header.h = height;
+    img_dsc->header.stride = width * 3; // RGB888每像素3字节
+    img_dsc->header.reserved_2 = 0;
+    img_dsc->data_size = rgb_size;
+    img_dsc->data = rgb_data;
+    img_dsc->reserved = NULL;
+    
+    // 保存到全局变量以便后续释放
+    dynamic_img_dsc = img_dsc;
+    dynamic_img_data = rgb_data;
+    
+    printf("成功创建图像描述符: %dx%d, 数据大小: %d\n", width, height, rgb_size);
+    return img_dsc;
 }
 
 // 通用照片显示函数
@@ -56,8 +304,66 @@ static void show_photo_overlay(const lv_image_dsc_t * photo_img)
 
 void player_1(lv_event_t * e)
 {
-    // 显示第一张照片（使用现有的图片资源）
-    show_photo_overlay(&ui_img_1_png);
+    printf("\n🎯 Player 1 触发 - 尝试从SD卡加载图片\n");
+    
+    // 首先检查SD卡状态
+    if (!check_sd_card_status()) {
+        printf("❌ SD卡状态检查失败，使用默认图片\n");
+        printf("💡 建议检查:\n");
+        printf("   1. SD卡是否正确插入\n");
+        printf("   2. SD卡是否损坏\n");
+        printf("   3. SD卡格式是否为FAT32\n");
+        printf("   4. 重新插拔SD卡\n");
+        show_photo_overlay(&ui_img_1_png);
+        return;
+    }
+    
+    // 简化的图像文件搜索
+    find_simple_image_files();
+    
+    // 更保守的路径尝试列表 - 减少嵌套目录访问
+    const char *possible_paths[] = {
+        "/sdcard/player/1-long/360jpg/Image50.jpg",
+        NULL  // 结束标记
+    };
+    
+    lv_image_dsc_t * sd_img = NULL;
+    const char * successful_path = NULL;
+    
+    printf("🔍 尝试加载图片文件...\n");
+    
+    for (int i = 0; possible_paths[i] != NULL; i++) {
+        printf("📝 尝试路径 %d: %s\n", i+1, possible_paths[i]);
+        
+        // 使用安全的文件存在检查
+        if (safe_file_exists(possible_paths[i])) {
+            printf("✅ 文件存在，尝试读取和解码...\n");
+            sd_img = create_image_from_sd_jpeg(possible_paths[i]);
+            if (sd_img) {
+                successful_path = possible_paths[i];
+                printf("🎉 成功解码图片！\n");
+                break;
+            } else {
+                printf("❌ 文件存在但解码失败\n");
+            }
+        } else {
+            printf("❌ 文件不存在\n");
+        }
+    }
+    
+    if (sd_img && successful_path) {
+        printf("🖼️ 成功使用路径: %s\n", successful_path);
+        show_photo_overlay(sd_img);
+    } else {
+        printf("⚠️ 无法从SD卡加载图片，使用默认图片\n");
+        printf("💡 建议:\n");
+        printf("   1. 将一个JPEG图片重命名为 'Image50.jpg' 并放在SD卡根目录\n");
+        printf("   2. 确保图片不超过1MB大小\n");
+        printf("   3. 使用标准JPEG格式（非渐进式JPEG）\n");
+        show_photo_overlay(&ui_img_1_png);
+    }
+    
+    printf("✨ Player 1 处理完成\n\n");
 }
 
 void player_2(lv_event_t * e)
