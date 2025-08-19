@@ -5,168 +5,152 @@
 
 #include "ui.h"
 
-// 定义屏幕切换宏
+// 定义屏幕切换宏：用于简化屏幕切换操作的宏定义
+// 参数：目标屏幕、淡入模式、速度、延迟、目标初始化函数
 #define _ui_screen_change(target, fademode, spd, delay, target_init) lv_scr_load_anim(*target, fademode, spd, delay, false)
 
 ///////////////////// VARIABLES ////////////////////
 
 
-// SCREEN: ui_Screen_Screen1
-void ui_Screen_Screen1_screen_init(void);
-void ui_event_Screen_Screen1(lv_event_t * e);
-lv_obj_t * ui_Screen_Screen1;
+// SCREEN: ui_Screen_Screen1 - 屏幕1相关声明
+void ui_Screen_Screen1_screen_init(void);    // 屏幕1初始化函数声明
+void ui_event_Screen_Screen1(lv_event_t * e); // 屏幕1事件处理函数声明
+lv_obj_t * ui_Screen_Screen1;                 // 屏幕1对象指针
 // CUSTOM VARIABLES
 
 
-// SCREEN: ui_Screen_Screen2
-void ui_Screen_Screen2_screen_init(void);
-void ui_event_Screen_Screen2(lv_event_t * e);
-lv_obj_t * ui_Screen_Screen2;
+// SCREEN: ui_Screen_Screen2 - 屏幕2相关声明
+void ui_Screen_Screen2_screen_init(void);    // 屏幕2初始化函数声明
+void ui_event_Screen_Screen2(lv_event_t * e); // 屏幕2事件处理函数声明
+lv_obj_t * ui_Screen_Screen2;                 // 屏幕2对象指针
 // CUSTOM VARIABLES
 
 
-// SCREEN: ui_Screen_Screen3
-void ui_Screen_Screen3_screen_init(void);
-void ui_event_Screen_Screen3(lv_event_t * e);
-lv_obj_t * ui_Screen_Screen3;
+// SCREEN: ui_Screen_Screen3 - 屏幕3相关声明
+void ui_Screen_Screen3_screen_init(void);    // 屏幕3初始化函数声明
+void ui_event_Screen_Screen3(lv_event_t * e); // 屏幕3事件处理函数声明
+lv_obj_t * ui_Screen_Screen3;                 // 屏幕3对象指针
 // CUSTOM VARIABLES
 
-// EVENTS
-lv_obj_t * ui_Startevents____initial_actions0;
+// EVENTS - 事件相关对象
+lv_obj_t * ui_Startevents____initial_actions0; // 初始动作事件对象
 
-// IMAGES AND IMAGE SETS
+// IMAGES AND IMAGE SETS - 图片资源数组
+// 包含三张图片的数组，分别对应三个屏幕的背景图片
 const lv_image_dsc_t * ui_imgset_[3] = {&ui_img_1_png, &ui_img_2_png, &ui_img_3_png};
 
 ///////////////////// TEST LVGL SETTINGS ////////////////////
+// 编译时检查：确保LVGL颜色深度设置与SquareLine Studio的设置匹配
+// 如果颜色深度不是16位，编译时会报错
 #if LV_COLOR_DEPTH != 16
     #error "LV_COLOR_DEPTH should be 16bit to match SquareLine Studio's settings"
 #endif
 
 ///////////////////// ANIMATIONS ////////////////////
+// 动画相关代码段（当前为空）
 
 ///////////////////// FUNCTIONS ////////////////////
+/**
+ * @brief 屏幕1的事件处理函数
+ * @param e 事件对象指针，包含事件类型和相关数据
+ */
 void ui_event_Screen_Screen1(lv_event_t * e)
 {
+    // 获取事件类型代码
     lv_event_code_t event_code = lv_event_get_code(e);
-    
-    // 添加调试信息
-    printf("Screen1 event triggered: %d\n", event_code);
 
+    // 检测左滑手势事件：用于切换到屏幕2
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
-        printf("Screen1: Left gesture detected\n");
+        // 等待用户释放触摸，避免事件冲突
         lv_indev_wait_release(lv_indev_active());
+        // 执行屏幕切换：从屏幕1切换到屏幕2，使用淡入动画，持续300ms
         _ui_screen_change(&ui_Screen_Screen2, LV_SCR_LOAD_ANIM_FADE_ON, 300, 0, &ui_Screen_Screen2_screen_init);
     }
-    if(event_code == LV_EVENT_SHORT_CLICKED) {
-        printf("Screen1: Short click detected\n");
-        player_1(e);
-    }
+    // 检测点击事件：只播放照片，不切换屏幕
     if(event_code == LV_EVENT_CLICKED) {
-        printf("Screen1: Click detected - Switching to Screen2\n");
-        // 添加点击切换屏幕功能
-        printf("Calling _ui_screen_change to Screen2...\n");
-        _ui_screen_change(&ui_Screen_Screen2, LV_SCR_LOAD_ANIM_FADE_ON, 300, 0, &ui_Screen_Screen2_screen_init);
-        printf("Screen change call completed\n");
+        // 显示照片覆盖层
         player_1(e);
-    }
-    if(event_code == LV_EVENT_PRESSED) {
-        printf("Screen1: Press detected\n");
-    }
-    if(event_code == LV_EVENT_RELEASED) {
-        printf("Screen1: Release detected\n");
     }
 }
 
+
+/**
+ * @brief 屏幕2的事件处理函数
+ * @param e 事件对象指针，包含事件类型和相关数据
+ */
 void ui_event_Screen_Screen2(lv_event_t * e)
 {
+    // 获取事件类型代码
     lv_event_code_t event_code = lv_event_get_code(e);
-    
-    // 添加调试信息
-    printf("Screen2 event triggered: %d\n", event_code);
 
+    // 检测左滑手势事件：用于切换到屏幕3
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_LEFT) {
-        printf("Screen2: Left gesture detected\n");
+        // 等待用户释放触摸，避免事件冲突
         lv_indev_wait_release(lv_indev_active());
+        // 执行屏幕切换：从屏幕2切换到屏幕3，使用淡入动画，持续500ms
         _ui_screen_change(&ui_Screen_Screen3, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen3_screen_init);
     }
+    // 检测右滑手势事件：用于切换到屏幕1
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
-        printf("Screen2: Right gesture detected\n");
+        // 等待用户释放触摸，避免事件冲突
         lv_indev_wait_release(lv_indev_active());
+        // 执行屏幕切换：从屏幕2切换到屏幕1，使用淡入动画，持续500ms
         _ui_screen_change(&ui_Screen_Screen1, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen1_screen_init);
-        player_2(e);
     }
+    // 检测点击事件：只播放照片，不切换屏幕
     if(event_code == LV_EVENT_CLICKED) {
-        printf("Screen2: Click detected - Switching to Screen3\n");
-        // 添加点击切换屏幕功能
-        printf("Calling _ui_screen_change to Screen3...\n");
-        _ui_screen_change(&ui_Screen_Screen3, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen3_screen_init);
-        printf("Screen change call completed\n");
+        // 显示照片覆盖层
         player_2(e);
-    }
-    if(event_code == LV_EVENT_PRESSED) {
-        printf("Screen2: Press detected\n");
-    }
-    if(event_code == LV_EVENT_RELEASED) {
-        printf("Screen2: Release detected\n");
     }
 }
 
+/**
+ * @brief 屏幕3的事件处理函数
+ * @param e 事件对象指针，包含事件类型和相关数据
+ */
 void ui_event_Screen_Screen3(lv_event_t * e)
 {
+    // 获取事件类型代码
     lv_event_code_t event_code = lv_event_get_code(e);
     
-    // 添加调试信息
-    printf("Screen3 event triggered: %d\n", event_code);
-    
+    // 检测右滑手势事件：用于切换到屏幕2
     if(event_code == LV_EVENT_GESTURE &&  lv_indev_get_gesture_dir(lv_indev_active()) == LV_DIR_RIGHT) {
-        printf("Screen3: Right gesture detected\n");
+        // 等待用户释放触摸，避免事件冲突
         lv_indev_wait_release(lv_indev_active());
+        // 执行屏幕切换：从屏幕3切换到屏幕2，使用淡入动画，持续500ms
         _ui_screen_change(&ui_Screen_Screen2, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen2_screen_init);
     }
+    // 检测点击事件：只播放照片，不切换屏幕
     if(event_code == LV_EVENT_CLICKED) {
-        printf("Screen3: Click detected - Switching to Screen1\n");
-        // 添加点击切换屏幕功能
-        printf("Calling _ui_screen_change to Screen1...\n");
-        _ui_screen_change(&ui_Screen_Screen1, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, &ui_Screen_Screen1_screen_init);
-        printf("Screen change call completed\n");
+        // 显示照片覆盖层
         player_3(e);
-    }
-    if(event_code == LV_EVENT_PRESSED) {
-        printf("Screen3: Press detected\n");
-    }
-    if(event_code == LV_EVENT_RELEASED) {
-        printf("Screen3: Release detected\n");
     }
 }
 
 ///////////////////// SCREENS ////////////////////
 
+/**
+ * @brief 播放器UI初始化函数
+ * 设置主题、输入设备、初始化所有屏幕并加载默认屏幕
+ */
 void player_ui_init(void)
 {
+    // 获取默认显示设备
     lv_disp_t * dispp = lv_display_get_default();
+    // 初始化默认主题：蓝色主色调，红色强调色，非深色模式，使用默认字体
     lv_theme_t * theme = lv_theme_default_init(dispp, lv_palette_main(LV_PALETTE_BLUE), lv_palette_main(LV_PALETTE_RED),
                                                false, LV_FONT_DEFAULT);
+    // 将主题应用到显示设备
     lv_disp_set_theme(dispp, theme);
     
-    // 添加调试信息
-    printf("Player UI initializing...\n");
+    // 初始化所有三个屏幕对象
+    ui_Screen_Screen1_screen_init();  // 初始化屏幕1
+    ui_Screen_Screen2_screen_init();  // 初始化屏幕2
+    ui_Screen_Screen3_screen_init();  // 初始化屏幕3
     
-    // 检查输入设备
-    lv_indev_t *indev = lv_indev_get_next(NULL);
-    if (indev) {
-        printf("Input device found, type: %d\n", lv_indev_get_type(indev));
-        // 检查手势设置
-        printf("Gesture min velocity: %d\n", lv_indev_get_gesture_min_velocity(indev));
-        printf("Gesture threshold: %d\n", lv_indev_get_gesture_threshold(indev));
-    } else {
-        printf("No input device found!\n");
-    }
-    
-    ui_Screen_Screen1_screen_init();
-    ui_Screen_Screen2_screen_init();
-    ui_Screen_Screen3_screen_init();
+    // 创建初始动作对象（可能用于启动时的特殊处理）
     ui_Startevents____initial_actions0 = lv_obj_create(NULL);
-    lv_disp_load_scr(ui_Screen_Screen1);
     
-    printf("Player UI initialization complete, starting with Screen1\n");
+    // 加载并显示屏幕1作为默认启动屏幕
+    lv_disp_load_scr(ui_Screen_Screen1);
 }

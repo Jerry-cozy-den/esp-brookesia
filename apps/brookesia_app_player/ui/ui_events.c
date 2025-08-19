@@ -5,17 +5,69 @@
 
 #include "ui.h"
 
+// 全局变量，用于管理照片显示
+static lv_obj_t * photo_overlay = NULL;
+static lv_timer_t * photo_timer = NULL;
+
+// 定时器回调函数，用于关闭照片显示
+static void photo_timer_cb(lv_timer_t * timer)
+{
+    if (photo_overlay) {
+        lv_obj_delete(photo_overlay);
+        photo_overlay = NULL;
+    }
+    if (photo_timer) {
+        lv_timer_delete(photo_timer);
+        photo_timer = NULL;
+    }
+}
+
+// 通用照片显示函数
+static void show_photo_overlay(const lv_image_dsc_t * photo_img)
+{
+    // 如果已经有照片显示，先关闭
+    if (photo_overlay) {
+        lv_obj_delete(photo_overlay);
+        photo_overlay = NULL;
+    }
+    if (photo_timer) {
+        lv_timer_delete(photo_timer);
+        photo_timer = NULL;
+    }
+
+    // 创建覆盖层容器
+    photo_overlay = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(photo_overlay, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_pos(photo_overlay, 0, 0);
+    lv_obj_remove_flag(photo_overlay, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_opa(photo_overlay, LV_OPA_80, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(photo_overlay, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_border_width(photo_overlay, 0, LV_PART_MAIN);
+
+    // 创建图片对象
+    lv_obj_t * photo_img_obj = lv_image_create(photo_overlay);
+    lv_image_set_src(photo_img_obj, photo_img);
+    lv_obj_center(photo_img_obj);
+
+    // 设置3秒定时器
+    photo_timer = lv_timer_create(photo_timer_cb, 3000, NULL);
+    lv_timer_set_repeat_count(photo_timer, 1);
+}
+
 void player_1(lv_event_t * e)
 {
-	// Your code here
+    // 显示第一张照片（使用现有的图片资源）
+    show_photo_overlay(&ui_img_1_png);
 }
 
 void player_2(lv_event_t * e)
 {
-	// Your code here
+    // 显示第二张照片（使用现有的图片资源）
+    show_photo_overlay(&ui_img_2_png);
 }
 
 void player_3(lv_event_t * e)
 {
-	// Your code here
+    // 显示第三张照片（使用现有的图片资源）
+    show_photo_overlay(&ui_img_3_png);
 }
