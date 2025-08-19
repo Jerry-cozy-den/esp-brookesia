@@ -22,6 +22,10 @@ static bool check_sd_card_status(void);
 static void convert_rgb_to_bgr(uint8_t * rgb_data, int pixel_count);
 static void clear_frame_cache(void);
 static lv_image_dsc_t * get_cached_frame(int frame_num);
+// 新增：流解析相关函数声明
+static jpeg_error_t init_jpeg_stream_decoder(void);
+static void cleanup_jpeg_stream_decoder(void);
+static lv_image_dsc_t * create_image_from_sd_jpeg_stream(const char * file_path);
 
 // 全局变量，用于管理照片显示
 static lv_obj_t * photo_overlay = NULL;
@@ -37,6 +41,11 @@ static int total_frames = 0;
 static char animation_base_path[256];
 static bool is_animation_playing = false;
 static int animation_interval_ms = 10;  // 动画间隔，可调节（毫秒）
+
+// 流解析相关全局变量
+static struct esp_jpeg_stream jpeg_stream_instance;
+static esp_jpeg_stream_handle_t jpeg_stream_handle = NULL;
+static bool jpeg_stream_initialized = false;
 
 // 定时器回调函数，用于关闭照片显示
 static void photo_timer_cb(lv_timer_t * timer)
@@ -109,6 +118,9 @@ static void animation_timer_cb(lv_timer_t * timer)
             dynamic_img_data = NULL;
         }
         
+        // 清理JPEG流解码器以释放资源
+        cleanup_jpeg_stream_decoder();
+        
         return;
     }
     
@@ -121,8 +133,8 @@ static void animation_timer_cb(lv_timer_t * timer)
         printf("🎞️ 播放第 %d/%d 帧\n", current_frame, total_frames);
     }
     
-    // 加载并显示当前帧
-    lv_image_dsc_t * frame_img = create_image_from_sd_jpeg(frame_path);
+    // 加载并显示当前帧（使用流解析优化性能）
+    lv_image_dsc_t * frame_img = create_image_from_sd_jpeg_stream(frame_path);
     if (frame_img && animation_img_obj) {
         lv_image_set_src(animation_img_obj, frame_img);
         // 强制刷新显示以减少卡顿
@@ -167,6 +179,11 @@ static int get_animation_frame_count(const char * folder_path)
 static void start_animation(const char * folder_path)
 {
     printf("\n🎬 开始播放动画: %s\n", folder_path);
+    
+    // 初始化JPEG流解码器以提高性能
+    if (init_jpeg_stream_decoder() != JPEG_ERR_OK) {
+        printf("❌ 无法初始化JPEG流解码器，使用标准解码\n");
+    }
     
     // 停止之前的动画或照片显示
     if (animation_timer) {
@@ -283,6 +300,140 @@ static bool safe_file_exists(const char *filepath)
         return false;
     }
     return S_ISREG(st.st_mode);  // 确保是常规文件
+}
+
+// 初始化JPEG流解码器
+static jpeg_error_t init_jpeg_stream_decoder(void)
+{
+    if (jpeg_stream_initialized) {
+        return JPEG_ERR_OK;  // 已经初始化
+    }
+    
+    jpeg_stream_handle = &jpeg_stream_instance;
+    jpeg_error_t ret = esp_jpeg_stream_open(jpeg_stream_handle);
+    
+    if (ret == JPEG_ERR_OK) {
+        jpeg_stream_initialized = true;
+        printf("✅ JPEG流解码器初始化成功\n");
+    } else {
+        printf("❌ JPEG流解码器初始化失败，错误码: %d\n", ret);
+        jpeg_stream_handle = NULL;
+    }
+    
+    return ret;
+}
+
+// 清理JPEG流解码器
+static void cleanup_jpeg_stream_decoder(void)
+{
+    if (jpeg_stream_initialized && jpeg_stream_handle) {
+        esp_jpeg_stream_close(jpeg_stream_handle);
+        jpeg_stream_handle = NULL;
+        jpeg_stream_initialized = false;
+        printf("🧹 JPEG流解码器已清理\n");
+    }
+}
+
+// 使用流解析从SD卡读取JPEG文件并创建LVGL图像描述符
+static lv_image_dsc_t * create_image_from_sd_jpeg_stream(const char * file_path)
+{
+    FILE * file = NULL;
+    uint8_t * jpeg_data = NULL;
+    uint8_t * rgb_data = NULL;
+    lv_image_dsc_t * img_dsc = NULL;
+    int jpeg_size = 0;
+    int rgb_size = 0;
+    
+    // 确保流解码器已初始化
+    if (!jpeg_stream_initialized) {
+        if (init_jpeg_stream_decoder() != JPEG_ERR_OK) {
+            printf("❌ 无法初始化JPEG流解码器\n");
+            return NULL;
+        }
+    }
+    
+    // 先释放之前的动态图像数据
+    if (dynamic_img_dsc) {
+        free(dynamic_img_dsc);
+        dynamic_img_dsc = NULL;
+    }
+    if (dynamic_img_data) {
+        jpeg_free_align(dynamic_img_data);
+        dynamic_img_data = NULL;
+    }
+    
+    // 打开SD卡上的JPEG文件
+    file = fopen(file_path, "rb");
+    if (!file) {
+        return NULL;
+    }
+    
+    // 获取文件大小
+    fseek(file, 0, SEEK_END);
+    jpeg_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    if (jpeg_size <= 0) {
+        fclose(file);
+        return NULL;
+    }
+    
+    // 分配内存用于JPEG数据
+    jpeg_data = malloc(jpeg_size);
+    if (!jpeg_data) {
+        fclose(file);
+        return NULL;
+    }
+    
+    // 读取JPEG文件数据
+    size_t bytes_read = fread(jpeg_data, 1, jpeg_size, file);
+    fclose(file);
+    
+    if (bytes_read != jpeg_size) {
+        free(jpeg_data);
+        return NULL;
+    }
+    
+    // 使用流解码器解码JPEG
+    jpeg_error_t ret = esp_jpeg_stream_decode(jpeg_stream_handle, jpeg_data, jpeg_size, &rgb_data, &rgb_size);
+    free(jpeg_data); // 释放JPEG原始数据
+    
+    if (ret != JPEG_ERR_OK || !rgb_data) {
+        return NULL;
+    }
+    
+    // 获取图像尺寸信息
+    int width = jpeg_stream_handle->out_info->width;
+    int height = jpeg_stream_handle->out_info->height;
+    
+    // 转换RGB到BGR格式以修复颜色显示问题
+    int pixel_count = width * height;
+    convert_rgb_to_bgr(rgb_data, pixel_count);
+    
+    // 创建LVGL图像描述符
+    img_dsc = malloc(sizeof(lv_image_dsc_t));
+    if (!img_dsc) {
+        jpeg_free_align(rgb_data);
+        return NULL;
+    }
+    
+    // 设置图像头部信息
+    img_dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+    img_dsc->header.cf = LV_COLOR_FORMAT_RGB888;
+    img_dsc->header.flags = 0;
+    img_dsc->header.w = width;
+    img_dsc->header.h = height;
+    img_dsc->header.stride = width * 3;
+    img_dsc->header.reserved_2 = 0;
+    img_dsc->data_size = rgb_size;
+    img_dsc->data = rgb_data;
+    img_dsc->reserved = NULL;
+    
+    // 保存到全局变量以便后续释放
+    dynamic_img_dsc = img_dsc;
+    dynamic_img_data = rgb_data;
+    
+    return img_dsc;
 }
 
 // 简化的图像文件搜索函数 - 只搜索根目录，避免过度访问SD卡
@@ -596,4 +747,53 @@ void player_3(lv_event_t * e)
     start_animation(animation_folder);
     
     printf("✨ Player 3 动画启动完成\n\n");
+}
+
+// 公共函数：初始化播放器模块
+void player_module_init(void)
+{
+    printf("🚀 初始化播放器模块...\n");
+    
+    // 预初始化JPEG流解码器以提高首次播放性能
+    if (init_jpeg_stream_decoder() == JPEG_ERR_OK) {
+        printf("✅ JPEG流解码器预初始化成功\n");
+    } else {
+        printf("⚠️ JPEG流解码器预初始化失败，将在首次使用时初始化\n");
+    }
+}
+
+// 公共函数：清理播放器模块
+void player_module_cleanup(void)
+{
+    printf("🧹 清理播放器模块...\n");
+    
+    // 停止当前播放的动画
+    if (is_animation_playing) {
+        is_animation_playing = false;
+        if (animation_timer) {
+            lv_timer_delete(animation_timer);
+            animation_timer = NULL;
+        }
+    }
+    
+    // 关闭覆盖层
+    if (photo_overlay) {
+        lv_obj_delete(photo_overlay);
+        photo_overlay = NULL;
+    }
+    
+    // 释放图像数据
+    if (dynamic_img_dsc) {
+        free(dynamic_img_dsc);
+        dynamic_img_dsc = NULL;
+    }
+    if (dynamic_img_data) {
+        jpeg_free_align(dynamic_img_data);
+        dynamic_img_data = NULL;
+    }
+    
+    // 清理JPEG流解码器
+    cleanup_jpeg_stream_decoder();
+    
+    printf("✅ 播放器模块清理完成\n");
 }

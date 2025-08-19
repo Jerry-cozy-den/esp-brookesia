@@ -16,6 +16,10 @@ void player_1(lv_event_t * e);
 void player_2(lv_event_t * e);
 void player_3(lv_event_t * e);
 
+// 播放器模块管理函数
+void player_module_init(void);
+void player_module_cleanup(void);
+
 #ifdef __cplusplus
 } /*extern "C"*/
 #endif
