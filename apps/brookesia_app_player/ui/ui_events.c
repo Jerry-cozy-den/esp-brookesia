@@ -19,6 +19,9 @@ static bool safe_file_exists(const char *filepath);
 static lv_image_dsc_t * create_image_from_sd_jpeg(const char * file_path);
 static void show_photo_overlay(const lv_image_dsc_t * photo_img);
 static bool check_sd_card_status(void);
+static void convert_rgb_to_bgr(uint8_t * rgb_data, int pixel_count);
+static void clear_frame_cache(void);
+static lv_image_dsc_t * get_cached_frame(int frame_num);
 
 // 全局变量，用于管理照片显示
 static lv_obj_t * photo_overlay = NULL;
@@ -33,6 +36,7 @@ static int current_frame = 0;
 static int total_frames = 0;
 static char animation_base_path[256];
 static bool is_animation_playing = false;
+static int animation_interval_ms = 10;  // 动画间隔，可调节（毫秒）
 
 // 定时器回调函数，用于关闭照片显示
 static void photo_timer_cb(lv_timer_t * timer)
@@ -53,6 +57,18 @@ static void photo_timer_cb(lv_timer_t * timer)
     if (dynamic_img_data) {
         jpeg_free_align(dynamic_img_data);
         dynamic_img_data = NULL;
+    }
+}
+
+// RGB到BGR颜色转换函数（解决红蓝颜色显示错误）
+static void convert_rgb_to_bgr(uint8_t * rgb_data, int pixel_count)
+{
+    for (int i = 0; i < pixel_count; i++) {
+        // 交换R和B字节，保持G不变
+        uint8_t temp = rgb_data[i * 3 + 0];      // 保存R
+        rgb_data[i * 3 + 0] = rgb_data[i * 3 + 2]; // R = B
+        rgb_data[i * 3 + 2] = temp;              // B = R
+        // G (rgb_data[i * 3 + 1]) 保持不变
     }
 }
 
@@ -100,12 +116,17 @@ static void animation_timer_cb(lv_timer_t * timer)
     char frame_path[512];
     snprintf(frame_path, sizeof(frame_path), "%s/Image%d.jpg", animation_base_path, current_frame);
     
-    printf("🎞️ 播放第 %d/%d 帧: %s\n", current_frame, total_frames, frame_path);
+    // 减少日志输出以提高性能，只在关键帧输出
+    if (current_frame % 10 == 1 || current_frame == 1) {
+        printf("🎞️ 播放第 %d/%d 帧\n", current_frame, total_frames);
+    }
     
     // 加载并显示当前帧
     lv_image_dsc_t * frame_img = create_image_from_sd_jpeg(frame_path);
     if (frame_img && animation_img_obj) {
         lv_image_set_src(animation_img_obj, frame_img);
+        // 强制刷新显示以减少卡顿
+        lv_obj_invalidate(animation_img_obj);
     } else {
         printf("❌ 加载第 %d 帧失败\n", current_frame);
     }
@@ -189,10 +210,10 @@ static void start_animation(const char * folder_path)
     current_frame = 0;  // 将在定时器回调中递增到1
     is_animation_playing = true;
     
-    // 创建动画定时器，30ms间隔（约33fps，接近0.03s）
-    animation_timer = lv_timer_create(animation_timer_cb, 30, NULL);
+    // 创建动画定时器，使用可调节的间隔
+    animation_timer = lv_timer_create(animation_timer_cb, animation_interval_ms, NULL);
     
-    printf("🎯 动画设置完成，总帧数: %d\n", total_frames);
+    printf("🎯 动画设置完成，总帧数: %d，播放间隔: %dms\n", total_frames, animation_interval_ms);
 }
 
 // 简化的SD卡状态检查函数
@@ -334,28 +355,12 @@ static lv_image_dsc_t * create_image_from_sd_jpeg(const char * file_path)
     }
     
     // 打开SD卡上的JPEG文件
-    printf("正在尝试打开文件: %s\n", file_path);
+    // 减少日志输出以提高性能
     file = fopen(file_path, "rb");
     if (!file) {
-        printf("错误: 无法打开文件: %s\n", file_path);
-        printf("可能的原因:\n");
-        printf("1. 文件不存在\n");
-        printf("2. 路径错误\n");
-        printf("3. SD卡未正确挂载\n");
-        printf("4. 权限问题\n");
-        
-        // 尝试检查文件是否存在
-        struct stat file_stat;
-        if (stat(file_path, &file_stat) == 0) {
-            printf("文件存在但无法打开 (大小: %ld 字节)\n", file_stat.st_size);
-        } else {
-            printf("文件不存在或路径错误\n");
-        }
-        
+        printf("❌ 无法打开文件: %s\n", file_path);
         return NULL;
     }
-    
-    printf("文件成功打开: %s\n", file_path);
     
     // 获取文件大小
     fseek(file, 0, SEEK_END);
@@ -396,6 +401,10 @@ static lv_image_dsc_t * create_image_from_sd_jpeg(const char * file_path)
         return NULL;
     }
     
+    // 转换RGB到BGR格式以修复颜色显示问题
+    int pixel_count = width * height;
+    convert_rgb_to_bgr(rgb_data, pixel_count);
+    
     // 创建LVGL图像描述符
     img_dsc = malloc(sizeof(lv_image_dsc_t));
     if (!img_dsc) {
@@ -420,7 +429,12 @@ static lv_image_dsc_t * create_image_from_sd_jpeg(const char * file_path)
     dynamic_img_dsc = img_dsc;
     dynamic_img_data = rgb_data;
     
-    printf("成功创建图像描述符: %dx%d, 数据大小: %d\n", width, height, rgb_size);
+    // 减少日志输出，只在第一帧显示详细信息
+    static bool first_frame_info_shown = false;
+    if (!first_frame_info_shown) {
+        printf("✅ 图像描述符: %dx%d, 数据大小: %d\n", width, height, rgb_size);
+        first_frame_info_shown = true;
+    }
     return img_dsc;
 }
 
