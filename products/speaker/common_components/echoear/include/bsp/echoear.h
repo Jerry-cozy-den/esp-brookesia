@@ -12,6 +12,22 @@
  * 外设配置和功能接口，包括显示、触控、音频、SD卡、I2C等模块的支持。
  */
 //极星引脚定义
+/*
+// 初始化摄像头
+esp_err_t ret = bsp_camera_init();
+if (ret == ESP_OK) {
+    // 获取一帧图像
+    camera_fb_t* fb = bsp_camera_get_fb();
+    if (fb) {
+        // 处理图像数据
+        // ...
+        
+        // 返回帧缓冲
+        bsp_camera_return_fb(fb);
+    }
+}
+摄像头历程    
+*/
 #pragma once
 
 #include "sdkconfig.h"
@@ -24,6 +40,10 @@
 #include "lvgl.h"
 #include "esp_lvgl_port.h"
 #include "bsp/display.h"
+
+#if CONFIG_USE_CAMERA
+#include "esp_camera.h"
+#endif
 
 /**************************************************************************************************
  *  BSP 硬件功能支持定义
@@ -41,7 +61,7 @@
 #define BSP_CAPS_AUDIO_MIC 0     /*!< 麦克风支持：当前版本麦克风功能未在BSP层启用 */
 #define BSP_CAPS_SDCARD 1        /*!< SD卡支持：支持microSD卡存储 */
 #define BSP_CAPS_IMU 0           /*!< 惯性测量单元支持：当前版本IMU功能未启用 */
-
+#define BSP_CAPS_CAMERA          /*!< 摄像头支持：极星版本硬件 */
 /* I2C 总线配置
  * EchoEar开发板使用I2C总线连接多个外设设备
  */
@@ -99,6 +119,29 @@
 // #define BSP_UART1_RX_V1_2 (GPIO_NUM_4)    /*!< UART1接收引脚 (V1.2版本) - 调试串口 */
 #define BSP_TOUCH_PAD2_V1_0 (GPIO_NUM_NC) /*!< 触控扩展接口2 (V1.0版本) - 未连接 */
 // #define BSP_TOUCH_PAD2_V1_2 (GPIO_NUM_6)  /*!< 触控扩展接口2 (V1.2版本) - 扩展触控 */
+
+// 极星适配改动9:加摄像头相关
+/* Camera pins */
+#define CAMERA_PIN_PWDN -1
+#define CAMERA_PIN_RESET -1
+#define CAMERA_PIN_XCLK 40
+#define CAMERA_PIN_SIOD 17
+#define CAMERA_PIN_SIOC 18
+
+#define CAMERA_PIN_D7 39
+#define CAMERA_PIN_D6 41
+#define CAMERA_PIN_D5 42
+#define CAMERA_PIN_D4 12
+#define CAMERA_PIN_D3 3
+#define CAMERA_PIN_D2 14
+#define CAMERA_PIN_D1 47
+#define CAMERA_PIN_D0 13
+#define CAMERA_PIN_VSYNC 21
+#define CAMERA_PIN_HREF 38
+#define CAMERA_PIN_PCLK 11
+
+#define XCLK_FREQ_HZ 20000000
+
 
 #ifdef __cplusplus
 extern "C"
@@ -438,6 +481,59 @@ extern "C"
      *
      */
     esp_err_t bsp_pcb_version_detect(bsp_pcd_diff_info_t *info);
+
+    /**************************************************************************************************
+     *
+     * 摄像头接口
+     *
+     * EchoEar智能音箱支持摄像头功能，配置为DVP并行接口连接。
+     * 摄像头通过I2C接口进行配置，数据通过并行接口传输。
+     *
+     **************************************************************************************************/
+#if CONFIG_USE_CAMERA
+    /**
+     * @brief 初始化摄像头
+     *
+     * 使用预定义的引脚配置初始化摄像头模块。
+     * 配置摄像头的分辨率、像素格式、帧缓冲等参数。
+     *
+     * @return
+     *      - ESP_OK                摄像头初始化成功
+     *      - ESP_ERR_INVALID_ARG   参数错误
+     *      - ESP_ERR_NO_MEM        内存不足
+     *      - ESP_FAIL              摄像头初始化失败
+     */
+    esp_err_t bsp_camera_init(void);
+
+    /**
+     * @brief 反初始化摄像头
+     *
+     * 释放摄像头相关资源并关闭摄像头模块。
+     *
+     * @return
+     *      - ESP_OK                摄像头反初始化成功
+     *      - ESP_FAIL              摄像头反初始化失败
+     */
+    esp_err_t bsp_camera_deinit(void);
+
+    /**
+     * @brief 获取摄像头帧缓冲
+     *
+     * 从摄像头获取一帧图像数据。
+     *
+     * @return 摄像头帧缓冲指针，失败时返回NULL
+     */
+    camera_fb_t* bsp_camera_get_fb(void);
+
+    /**
+     * @brief 返回摄像头帧缓冲
+     *
+     * 将帧缓冲返回给摄像头驱动以便复用。
+     *
+     * @param fb 要返回的帧缓冲指针
+     */
+    void bsp_camera_return_fb(camera_fb_t* fb);
+#endif // CONFIG_USE_CAMERA
 
 #ifdef __cplusplus
 }

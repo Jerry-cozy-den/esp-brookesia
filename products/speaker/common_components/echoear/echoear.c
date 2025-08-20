@@ -24,6 +24,10 @@
 #include "esp_lcd_panel_vendor.h" // LCD厂商特定驱动
 #include "esp_lcd_panel_ops.h"   // LCD面板操作接口
 
+#if CONFIG_USE_CAMERA
+#include "esp_camera.h"          // 摄像头驱动
+#endif
+
 /* BSP 相关头文件 */
 #include "bsp/esp-bsp.h"         // BSP主头文件
 #include "bsp/display.h"         // 显示系统接口
@@ -1037,3 +1041,116 @@ esp_err_t bsp_sdcard_unmount(void)
 
     return ret;
 }
+
+/**************************************************************************************************
+ *
+ * 摄像头实现
+ *
+ **************************************************************************************************/
+#if CONFIG_USE_CAMERA
+
+/**
+ * @brief 初始化摄像头
+ * 
+ * 使用预定义的引脚配置初始化摄像头模块。
+ * 配置摄像头的分辨率、像素格式、帧缓冲等参数。
+ * 
+ * @return 
+ *      - ESP_OK: 摄像头初始化成功
+ *      - ESP_ERR_INVALID_ARG: 参数错误
+ *      - ESP_ERR_NO_MEM: 内存不足
+ *      - ESP_FAIL: 摄像头初始化失败
+ */
+esp_err_t bsp_camera_init(void)
+{
+    ESP_LOGI(TAG, "Initializing camera...");
+
+    camera_config_t config = {};
+    config.ledc_channel = LEDC_CHANNEL_2;  // LEDC通道选择  用于生成XCLK时钟 但是S3不用
+    config.ledc_timer = LEDC_TIMER_2;      // LEDC timer选择  用于生成XCLK时钟 但是S3不用
+    config.pin_d0 = CAMERA_PIN_D0;
+    config.pin_d1 = CAMERA_PIN_D1;
+    config.pin_d2 = CAMERA_PIN_D2;
+    config.pin_d3 = CAMERA_PIN_D3;
+    config.pin_d4 = CAMERA_PIN_D4;
+    config.pin_d5 = CAMERA_PIN_D5;
+    config.pin_d6 = CAMERA_PIN_D6;
+    config.pin_d7 = CAMERA_PIN_D7;
+    config.pin_xclk = CAMERA_PIN_XCLK;
+    config.pin_pclk = CAMERA_PIN_PCLK;
+    config.pin_vsync = CAMERA_PIN_VSYNC;
+    config.pin_href = CAMERA_PIN_HREF;
+    config.pin_sccb_sda = -1;                // 这里写-1 表示使用已经初始化的I2C接口
+    config.pin_sccb_scl = CAMERA_PIN_SIOC;   // 使用定义的I2C时钟引脚
+    config.sccb_i2c_port = 1;                // I2C端口号
+    config.pin_pwdn = CAMERA_PIN_PWDN;
+    config.pin_reset = CAMERA_PIN_RESET;
+    config.xclk_freq_hz = XCLK_FREQ_HZ;
+    config.pixel_format = PIXFORMAT_RGB565;
+    config.frame_size = FRAMESIZE_VGA;
+    config.jpeg_quality = 12;
+    config.fb_count = 1;
+    config.fb_location = CAMERA_FB_IN_PSRAM;
+    config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
+
+    /* 初始化摄像头 */
+    esp_err_t err = esp_camera_init(&config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Camera init failed with error 0x%x", err);
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Camera initialized successfully");
+    return ESP_OK;
+}
+
+/**
+ * @brief 反初始化摄像头
+ * 
+ * 释放摄像头相关资源并关闭摄像头模块。
+ * 
+ * @return 
+ *      - ESP_OK: 摄像头反初始化成功
+ *      - ESP_FAIL: 摄像头反初始化失败
+ */
+esp_err_t bsp_camera_deinit(void)
+{
+    ESP_LOGI(TAG, "Deinitializing camera...");
+    
+    esp_err_t err = esp_camera_deinit();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Camera deinit failed with error 0x%x", err);
+        return ESP_FAIL;
+    }
+    
+    ESP_LOGI(TAG, "Camera deinitialized successfully");
+    return ESP_OK;
+}
+
+/**
+ * @brief 获取摄像头帧缓冲
+ * 
+ * 从摄像头获取一帧图像数据。
+ * 
+ * @return 摄像头帧缓冲指针，失败时返回NULL
+ */
+camera_fb_t* bsp_camera_get_fb(void)
+{
+    return esp_camera_fb_get();
+}
+
+/**
+ * @brief 返回摄像头帧缓冲
+ * 
+ * 将帧缓冲返回给摄像头驱动以便复用。
+ * 
+ * @param fb 要返回的帧缓冲指针
+ */
+void bsp_camera_return_fb(camera_fb_t* fb)
+{
+    if (fb != NULL) {
+        esp_camera_fb_return(fb);
+    }
+}
+
+#endif // CONFIG_USE_CAMERA
