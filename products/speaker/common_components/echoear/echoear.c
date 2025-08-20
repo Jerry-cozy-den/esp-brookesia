@@ -145,28 +145,29 @@ i2c_master_bus_handle_t bsp_i2c_get_handle(void)
 esp_err_t bsp_display_brightness_init(void)
 {
     /* 配置LEDC PWM通道用于背光控制 */
-    const ledc_channel_config_t LCD_backlight_channel = {
-        .gpio_num = BSP_LCD_BACKLIGHT,     // 背光控制GPIO引脚
-        .speed_mode = LEDC_LOW_SPEED_MODE, // 使用低速模式
-        .channel = LCD_BACKLIIGHT_CHANNEL, // PWM通道号
-        .intr_type = LEDC_INTR_DISABLE,    // 禁用PWM中断
-        .timer_sel = LEDC_TIMER_0,         // 使用定时器0
-        .duty = 0,                         // 初始占空比为0（关闭）
-        .hpoint = 0                        // PWM波形起始点
-    };
+    //极星适配改动4:注释背光PWM初始化引脚
+    // const ledc_channel_config_t LCD_backlight_channel = {
+    //     .gpio_num = BSP_LCD_BACKLIGHT,     // 背光控制GPIO引脚
+    //     .speed_mode = LEDC_LOW_SPEED_MODE, // 使用低速模式
+    //     .channel = LCD_BACKLIIGHT_CHANNEL, // PWM通道号
+    //     .intr_type = LEDC_INTR_DISABLE,    // 禁用PWM中断
+    //     .timer_sel = LEDC_TIMER_0,         // 使用定时器0
+    //     .duty = 0,                         // 初始占空比为0（关闭）
+    //     .hpoint = 0                        // PWM波形起始点
+    // };
     
-    /* 配置LEDC PWM定时器参数 */
-    const ledc_timer_config_t LCD_backlight_timer = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,  // 低速模式
-        .duty_resolution = LEDC_TIMER_10_BIT, // 10位分辨率（0-1023）
-        .timer_num = LEDC_TIMER_0,          // 定时器编号
-        .freq_hz = 4000,                    // PWM频率：4kHz
-        .clk_cfg = LEDC_AUTO_CLK            // 自动选择时钟源
-    };
+    // /* 配置LEDC PWM定时器参数 */
+    // const ledc_timer_config_t LCD_backlight_timer = {
+    //     .speed_mode = LEDC_LOW_SPEED_MODE,  // 低速模式
+    //     .duty_resolution = LEDC_TIMER_10_BIT, // 10位分辨率（0-1023）
+    //     .timer_num = LEDC_TIMER_0,          // 定时器编号
+    //     .freq_hz = 4000,                    // PWM频率：4kHz
+    //     .clk_cfg = LEDC_AUTO_CLK            // 自动选择时钟源
+    // };
 
-    /* 初始化PWM定时器和通道 */
-    BSP_ERROR_CHECK_RETURN_ERR(ledc_timer_config(&LCD_backlight_timer));
-    BSP_ERROR_CHECK_RETURN_ERR(ledc_channel_config(&LCD_backlight_channel));
+    // /* 初始化PWM定时器和通道 */
+    // BSP_ERROR_CHECK_RETURN_ERR(ledc_timer_config(&LCD_backlight_timer));
+    // BSP_ERROR_CHECK_RETURN_ERR(ledc_channel_config(&LCD_backlight_channel));
 
     return ESP_OK;
 }
@@ -197,12 +198,13 @@ esp_err_t bsp_display_brightness_set(int brightness_percent)
 
     ESP_LOGI(TAG, "Setting LCD backlight: %d%%", brightness_percent);
     
-    /* 将百分比转换为PWM占空比值（10位分辨率：100% = 1023） */
-    uint32_t duty_cycle = (1023 * brightness_percent) / 100; 
+    //极星适配改动5:注释亮度控制逻辑
+    // /* 将百分比转换为PWM占空比值（10位分辨率：100% = 1023） */
+    // uint32_t duty_cycle = (1023 * brightness_percent) / 100; 
     
-    /* 设置PWM占空比并更新输出 */
-    BSP_ERROR_CHECK_RETURN_ERR(ledc_set_duty(LEDC_LOW_SPEED_MODE, LCD_LEDC_CH, duty_cycle));
-    BSP_ERROR_CHECK_RETURN_ERR(ledc_update_duty(LEDC_LOW_SPEED_MODE, LCD_LEDC_CH));
+    // /* 设置PWM占空比并更新输出 */
+    // BSP_ERROR_CHECK_RETURN_ERR(ledc_set_duty(LEDC_LOW_SPEED_MODE, LCD_LEDC_CH, duty_cycle));
+    // BSP_ERROR_CHECK_RETURN_ERR(ledc_update_duty(LEDC_LOW_SPEED_MODE, LCD_LEDC_CH));
 
     return ESP_OK;
 }
@@ -784,14 +786,15 @@ void bsp_display_unlock(void)
 esp_err_t bsp_power_init(uint8_t power_en)
 {
     /* 配置电源控制GPIO为输出模式 */
-    gpio_config_t power_gpio_config = {
-        .mode = GPIO_MODE_OUTPUT,              // 输出模式
-        .pin_bit_mask = BIT64(BSP_POWER_OFF),  // 电源控制引脚
-    };
-    ESP_ERROR_CHECK(gpio_config(&power_gpio_config));
+    //极星适配改动3:注释电源初始化引脚
+    // gpio_config_t power_gpio_config = {
+    //     .mode = GPIO_MODE_OUTPUT,              // 输出模式
+    //     .pin_bit_mask = BIT64(BSP_POWER_OFF),  // 电源控制引脚
+    // };
+    // ESP_ERROR_CHECK(gpio_config(&power_gpio_config));
 
-    /* 设置电源控制信号电平 */
-    gpio_set_level(BSP_POWER_OFF, power_en);
+    // /* 设置电源控制信号电平 */
+    // gpio_set_level(BSP_POWER_OFF, power_en);
 
     return ESP_OK;
 }
@@ -830,51 +833,52 @@ esp_err_t bsp_pcb_version_detect(bsp_pcd_diff_info_t *info)
     bsp_pcd_diff_info_t temp_info = {0};
     
     /* 第一步：直接探测I2C设备（V1.0版本测试） */
-    esp_err_t ret = i2c_master_probe(bsp_i2c_get_handle(), 0x18, 100);
-    if (ret == ESP_OK) {
-        /* 检测到V1.0版本PCB */
-        ESP_LOGI(TAG, "Detect PCB version V1.0");
-        temp_info.version = BSP_PCB_VERSION_V1_0;
-        temp_info.audio.i2s_din_pin = BSP_I2S_DSIN_V1_0;    // V1.0音频输入引脚
-        temp_info.audio.pa_pin = BSP_POWER_AMP_IO_V1_0;     // V1.0功放控制引脚
-        temp_info.touch.pad2_pin = BSP_TOUCH_PAD2_V1_0;     // V1.0触控扩展引脚
-        temp_info.uart.tx_pin = BSP_UART1_TX_V1_0;          // V1.0串口发送引脚
-        temp_info.uart.rx_pin = BSP_UART1_RX_V1_0;          // V1.0串口接收引脚
-        temp_info.lcd.rst_pin = BSP_LCD_RST_V1_0;           // V1.0 LCD复位引脚
-        temp_info.lcd.rst_active_level = 0;                 // V1.0复位信号低电平有效
-    } else {
-        /* V1.0检测失败，尝试V1.2版本检测 */
-        /* 配置GPIO48为输出模式并拉高（V1.2版本需要） */
-        gpio_config_t gpio_conf = {
-            .pin_bit_mask = (1ULL << GPIO_NUM_48),  // GPIO48引脚
-            .mode = GPIO_MODE_OUTPUT,               // 输出模式
-            .pull_up_en = GPIO_PULLUP_DISABLE,      // 禁用上拉
-            .pull_down_en = GPIO_PULLDOWN_DISABLE,  // 禁用下拉
-            .intr_type = GPIO_INTR_DISABLE          // 禁用中断
-        };
-        ESP_ERROR_CHECK(gpio_config(&gpio_conf));
-        ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_48, 1));  // 拉高GPIO48
+    //极星适配改动1:取消pcb版本检测，使用默认第一版的定义（定义已修改）
+    // esp_err_t ret = i2c_master_probe(bsp_i2c_get_handle(), 0x18, 100);
+    // if (ret == ESP_OK) {
+    //     /* 检测到V1.0版本PCB */
+    ESP_LOGI(TAG, "Detect PCB version V1.0");
+    temp_info.version = BSP_PCB_VERSION_V1_0;
+    temp_info.audio.i2s_din_pin = BSP_I2S_DSIN_V1_0;    // V1.0音频输入引脚
+    temp_info.audio.pa_pin = BSP_POWER_AMP_IO_V1_0;     // V1.0功放控制引脚
+    temp_info.touch.pad2_pin = BSP_TOUCH_PAD2_V1_0;     // V1.0触控扩展引脚
+    temp_info.uart.tx_pin = BSP_UART1_TX_V1_0;          // V1.0串口发送引脚
+    temp_info.uart.rx_pin = BSP_UART1_RX_V1_0;          // V1.0串口接收引脚
+    temp_info.lcd.rst_pin = BSP_LCD_RST_V1_0;           // V1.0 LCD复位引脚
+    temp_info.lcd.rst_active_level = 0;                 // V1.0复位信号低电平有效
+    // } else {
+    //     /* V1.0检测失败，尝试V1.2版本检测 */
+    //     /* 配置GPIO48为输出模式并拉高（V1.2版本需要） */
+    //     gpio_config_t gpio_conf = {
+    //         .pin_bit_mask = (1ULL << GPIO_NUM_48),  // GPIO48引脚
+    //         .mode = GPIO_MODE_OUTPUT,               // 输出模式
+    //         .pull_up_en = GPIO_PULLUP_DISABLE,      // 禁用上拉
+    //         .pull_down_en = GPIO_PULLDOWN_DISABLE,  // 禁用下拉
+    //         .intr_type = GPIO_INTR_DISABLE          // 禁用中断
+    //     };
+    //     ESP_ERROR_CHECK(gpio_config(&gpio_conf));
+    //     ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_48, 1));  // 拉高GPIO48
 
-        vTaskDelay(pdMS_TO_TICKS(100));  // 等待100ms稳定
+    //     vTaskDelay(pdMS_TO_TICKS(100));  // 等待100ms稳定
 
-        /* 重新探测I2C设备（V1.2版本测试） */
-        ret = i2c_master_probe(bsp_i2c_get_handle(), 0x18, 100);
-        if (ret == ESP_OK) {
-            /* 检测到V1.2版本PCB */
-            ESP_LOGI(TAG, "Detect PCB version V1.2");
-            temp_info.version = BSP_PCB_VERSION_V1_2;
-            temp_info.audio.i2s_din_pin = BSP_I2S_DSIN_V1_2;    // V1.2音频输入引脚
-            temp_info.audio.pa_pin = BSP_POWER_AMP_IO_V1_2;     // V1.2功放控制引脚
-            temp_info.touch.pad2_pin = BSP_TOUCH_PAD2_V1_2;     // V1.2触控扩展引脚
-            temp_info.uart.tx_pin = BSP_UART1_TX_V1_2;          // V1.2串口发送引脚
-            temp_info.uart.rx_pin = BSP_UART1_RX_V1_2;          // V1.2串口接收引脚
-            temp_info.lcd.rst_pin = BSP_LCD_RST_V1_2;           // V1.2 LCD复位引脚
-            temp_info.lcd.rst_active_level = 1;                 // V1.2复位信号高电平有效
-        } else {
-            /* 两个版本都检测失败 */
-            ESP_LOGE(TAG, "PCB version detection error");
-        }
-    }
+    //     /* 重新探测I2C设备（V1.2版本测试） */
+    //     ret = i2c_master_probe(bsp_i2c_get_handle(), 0x18, 100);
+    //     if (ret == ESP_OK) {
+    //         /* 检测到V1.2版本PCB */
+    //         ESP_LOGI(TAG, "Detect PCB version V1.2");
+    //         temp_info.version = BSP_PCB_VERSION_V1_2;
+    //         temp_info.audio.i2s_din_pin = BSP_I2S_DSIN_V1_2;    // V1.2音频输入引脚
+    //         temp_info.audio.pa_pin = BSP_POWER_AMP_IO_V1_2;     // V1.2功放控制引脚
+    //         temp_info.touch.pad2_pin = BSP_TOUCH_PAD2_V1_2;     // V1.2触控扩展引脚
+    //         temp_info.uart.tx_pin = BSP_UART1_TX_V1_2;          // V1.2串口发送引脚
+    //         temp_info.uart.rx_pin = BSP_UART1_RX_V1_2;          // V1.2串口接收引脚
+    //         temp_info.lcd.rst_pin = BSP_LCD_RST_V1_2;           // V1.2 LCD复位引脚
+    //         temp_info.lcd.rst_active_level = 1;                 // V1.2复位信号高电平有效
+    //     } else {
+    //         /* 两个版本都检测失败 */
+    //         ESP_LOGE(TAG, "PCB version detection error");
+    //     }
+    // }
 
     /* 保存检测结果 */
     if (info) {
