@@ -5,6 +5,9 @@
  */
 #include <random>
 #include "esp_mac.h"
+#include "esp_task_wdt.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "private/esp_brookesia_ai_agent_utils.hpp"
 #include "esp_coze_chat.h"
 #include "coze_chat_app.hpp"
@@ -15,7 +18,7 @@
 #define SEND_CHAT_EVENT_TIMEOUT_MS              (1000)
 
 #define CHAT_EVENT_THREAD_NAME                  "chat_event"
-#define CHAT_EVENT_THREAD_STACK_SIZE            (6 * 1024)
+#define CHAT_EVENT_THREAD_STACK_SIZE            (8 * 1024)  // 增加堆栈大小
 #define CHAT_EVENT_THREAD_STACK_CAPS_EXT        (false)
 #define CHAT_EVENT_COZE_START_REPEAT_TIMEOUT_MS (30 * 1000)
 
@@ -390,7 +393,17 @@ bool Agent::processChatEvent(const ChatEvent &event)
                 ESP_UTILS_CHECK_FALSE_RETURN(false, false, "Coze agent info init failed");
             }
 
+            ESP_UTILS_LOGI("Starting chat app initialization (may take some time for model loading)...");
+            
+            // 重置看门狗并给其他任务执行机会
+            esp_task_wdt_reset();
+            vTaskDelay(pdMS_TO_TICKS(50));  // 给其他任务时间
+            
             ESP_UTILS_CHECK_FALSE_RETURN(coze_chat_app_init() == ESP_OK, false, "Init chat failed");
+            
+            // 初始化完成后再次重置看门狗
+            esp_task_wdt_reset();
+            ESP_UTILS_LOGI("Chat app initialization completed successfully");
 
             chat_state_guard.set(ChatStateInited);
             chat_state_guard.release();

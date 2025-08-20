@@ -9,6 +9,8 @@
 #include <math.h>
 #include "esp_err.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_task_wdt.h"
 #include "esp_log.h"
 
 #include "esp_gmf_element.h"
@@ -264,12 +266,24 @@ esp_err_t audio_recorder_open(recorder_event_callback_t cb, void *ctx)
     audio_recorder.afe_cfg->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
     audio_recorder.afe_cfg->wakenet_init = true;
     audio_recorder.afe_cfg->aec_init = true;
+    
+    ESP_LOGI(TAG, "Creating AFE manager (this may take some time for model loading)...");
+    
     esp_gmf_afe_manager_cfg_t afe_manager_cfg = DEFAULT_GMF_AFE_MANAGER_CFG(audio_recorder.afe_cfg, NULL, NULL, NULL, NULL);
     afe_manager_cfg.feed_task_setting.prio = DEFAULT_FEED_TASK_PRIO;
     afe_manager_cfg.feed_task_setting.stack_size = DEFAULT_FEED_TASK_STACK_SIZE;
     afe_manager_cfg.fetch_task_setting.prio = DEFAULT_FETCH_TASK_PRIO;
     afe_manager_cfg.fetch_task_setting.stack_size = DEFAULT_FETCH_TASK_STACK_SIZE;
+    // 极星适配改动8:看门狗超时， AI 音频前端处理初始化过程中被长时间阻塞，加延时
+    // 重置看门狗并给其他任务执行机会
+    esp_task_wdt_reset();
+    vTaskDelay(pdMS_TO_TICKS(50));
+    
     esp_gmf_afe_manager_create(&afe_manager_cfg, &audio_recorder.afe_manager);
+    
+    // AFE 管理器创建完成后再次重置看门狗
+    esp_task_wdt_reset();
+    ESP_LOGI(TAG, "AFE manager created successfully");
     esp_gmf_element_handle_t gmf_afe = NULL;
     esp_gmf_afe_cfg_t gmf_afe_cfg = DEFAULT_GMF_AFE_CFG(audio_recorder.afe_manager, esp_gmf_afe_event_cb, NULL, models);
     gmf_afe_cfg.vcmd_detect_en = VCMD_ENABLE;
