@@ -55,8 +55,9 @@
 #define BSP_I2S_SCLK (GPIO_NUM_9)          /*!< I2S位时钟 (BCLK) - 数字音频位同步时钟 */
 #define BSP_I2S_MCLK (GPIO_NUM_16)          /*!< I2S主时钟 (MCLK) - 音频编解码器主时钟 */
 #define BSP_I2S_LCLK (GPIO_NUM_45)          /*!< I2S帧时钟 (WS/LRCLK) - 左右声道选择时钟 */
-#define BSP_I2S_DOUT (GPIO_NUM_10)          /*!< I2S数据输出 - 连接到ES8311编解码器 */
-#define BSP_I2S_DSIN_V1_0 (GPIO_NUM_8)     /*!< I2S数据输入 (V1.0版本) - 来自ES7210 ADC */
+//
+#define BSP_I2S_DOUT (GPIO_NUM_8)          /*!< I2S数据输出 - 连接到ES8311编解码器 */
+#define BSP_I2S_DSIN_V1_0 (GPIO_NUM_10)     /*!< I2S数据输入 (V1.0版本) - 来自ES7210 ADC */
 // #define BSP_I2S_DSIN_V1_2 (GPIO_NUM_3)      /*!< I2S数据输入 (V1.2版本) - 来自ES7210 ADC */
 #define BSP_POWER_AMP_IO_V1_0 (GPIO_NUM_48)  /*!< 功率放大器使能 (V1.0版本) - 控制扬声器放大器 */
 // #define BSP_POWER_AMP_IO_V1_2 (GPIO_NUM_15) /*!< 功率放大器使能 (V1.2版本) - 控制扬声器放大器 */
