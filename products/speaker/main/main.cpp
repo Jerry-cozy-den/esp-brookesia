@@ -62,6 +62,10 @@
 #include "bsp/esp-bsp.h"          // 板级支持包：硬件相关的初始化和配置
 #include "esp_lvgl_port_disp.h"   // LVGL显示端口：连接LVGL和ESP32显示驱动
 
+#if CONFIG_USE_CAMERA
+#include "esp_camera.h"           // ESP32摄像头驱动：摄像头硬件抽象层
+#endif
+
 // ==================== ESP-Brookesia 框架相关头文件 ====================
 #include "esp_brookesia.hpp"      // ESP-Brookesia核心框架：智能音箱主框架
 #include "esp_brookesia_app_settings.hpp"    // 设置应用：系统参数配置界面
@@ -416,6 +420,21 @@ static bool init_display_and_draw_logic()
     
     // 打开LCD背光，显示内容变为可见
     bsp_display_backlight_on();
+
+    // ==================== 摄像头初始化 ====================
+    #if CONFIG_USE_CAMERA
+    // 初始化摄像头模块
+    ESP_UTILS_LOGI("摄像头Initializing camera...");
+    esp_err_t camera_ret = bsp_camera_init();
+    if (camera_ret == ESP_OK) {
+        ESP_UTILS_LOGI("摄像头Camera initialized successfully");
+    } else {
+        ESP_UTILS_LOGE("摄像头Camera initialization failed: %s", esp_err_to_name(camera_ret));
+        // 摄像头初始化失败不会阻止系统启动，只是记录错误
+    }
+    #else
+    ESP_UTILS_LOGW("摄像头Camera support is disabled in configuration");
+    #endif
 
     // ==================== 动画播放器事件处理 ====================
     // 这部分是实现AI机器人表情动画的核心机制

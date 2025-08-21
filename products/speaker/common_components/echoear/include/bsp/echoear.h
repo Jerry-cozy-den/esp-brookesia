@@ -40,10 +40,7 @@ if (ret == ESP_OK) {
 #include "lvgl.h"
 #include "esp_lvgl_port.h"
 #include "bsp/display.h"
-
-#if CONFIG_USE_CAMERA
 #include "esp_camera.h"
-#endif
 
 /**************************************************************************************************
  *  BSP 硬件功能支持定义
@@ -61,7 +58,7 @@ if (ret == ESP_OK) {
 #define BSP_CAPS_AUDIO_MIC 0     /*!< 麦克风支持：当前版本麦克风功能未在BSP层启用 */
 #define BSP_CAPS_SDCARD 1        /*!< SD卡支持：支持microSD卡存储 */
 #define BSP_CAPS_IMU 0           /*!< 惯性测量单元支持：当前版本IMU功能未启用 */
-#define BSP_CAPS_CAMERA          /*!< 摄像头支持：极星版本硬件 */
+#define BSP_CAPS_CAMERA 1        /*!< 摄像头支持：极星版本硬件 */
 /* I2C 总线配置
  * EchoEar开发板使用I2C总线连接多个外设设备
  */
@@ -490,7 +487,6 @@ extern "C"
      * 摄像头通过I2C接口进行配置，数据通过并行接口传输。
      *
      **************************************************************************************************/
-#if CONFIG_USE_CAMERA
     /**
      * @brief 初始化摄像头
      *
@@ -526,6 +522,15 @@ extern "C"
     camera_fb_t* bsp_camera_get_fb(void);
 
     /**
+     * @brief 获取摄像头最新帧缓冲
+     *
+     * 丢弃旧帧并获取最新的图像数据，确保拍摄到的是当前时刻的图像。
+     *
+     * @return 摄像头帧缓冲指针，失败时返回NULL
+     */
+    camera_fb_t* bsp_camera_get_fresh_fb(void);
+
+    /**
      * @brief 返回摄像头帧缓冲
      *
      * 将帧缓冲返回给摄像头驱动以便复用。
@@ -533,7 +538,26 @@ extern "C"
      * @param fb 要返回的帧缓冲指针
      */
     void bsp_camera_return_fb(camera_fb_t* fb);
-#endif // CONFIG_USE_CAMERA
+
+    /**
+     * @brief 按需拍照（初始化->拍照->反初始化）
+     *
+     * 每次拍照时重新初始化摄像头，确保获取最新的图像，避免旧帧问题。
+     * 拍照完成后需要调用bsp_camera_finish_picture()进行清理。
+     *
+     * @return 摄像头帧缓冲指针，失败时返回NULL
+     */
+    camera_fb_t* bsp_camera_take_picture(void);
+
+    /**
+     * @brief 完成拍照后的清理工作
+     *
+     * 释放帧缓冲并反初始化摄像头。
+     * 应该在使用完bsp_camera_take_picture()返回的帧缓冲后调用。
+     *
+     * @param fb 要释放的帧缓冲指针
+     */
+    void bsp_camera_finish_picture(camera_fb_t* fb);
 
 #ifdef __cplusplus
 }

@@ -4,6 +4,10 @@ dependencies:
     override_path: "../../core/brookesia_core"
     public: true
 
+  echoear:
+    override_path: "../../products/speaker/common_components/echoear"
+    public: true
+
   espressif/esp-lib-utils:
     version: "0.2.*"
     public: false

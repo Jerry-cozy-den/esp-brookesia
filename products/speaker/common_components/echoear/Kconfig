@@ -88,4 +88,12 @@ menu "Board Support Package(ESP-BOX-3)"
         help
             Whether to enable double framebuf.
     endmenu
+
+    menu "Camera"
+        config USE_CAMERA
+            bool "Enable camera support"
+            default y
+            help
+                Enable camera support for the board. This enables the camera driver and API.
+    endmenu
 endmenu

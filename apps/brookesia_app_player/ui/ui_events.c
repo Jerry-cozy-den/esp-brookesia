@@ -13,6 +13,11 @@
 #include <string.h>
 #include <strings.h>  // for strcasecmp
 #include <stdbool.h>  // for bool type
+#include "bsp/echoear.h"
+#include "esp_log.h"
+
+// 定义日志标签
+static const char *TAG = "UI_EVENTS";
 
 // 函数前向声明
 static bool safe_file_exists(const char *filepath);
@@ -32,6 +37,8 @@ static lv_obj_t * photo_overlay = NULL;
 static lv_timer_t * photo_timer = NULL;
 static lv_image_dsc_t * dynamic_img_dsc = NULL;
 static uint8_t * dynamic_img_data = NULL;
+static camera_fb_t * current_camera_fb = NULL;  // 新增：当前摄像头帧缓冲区
+static uint8_t * camera_display_buf = NULL;  // 新增：摄像头显示缓冲区（用于格式转换）
 
 // 动画播放相关全局变量
 static lv_timer_t * animation_timer = NULL;
@@ -66,6 +73,18 @@ static void photo_timer_cb(lv_timer_t * timer)
     if (dynamic_img_data) {
         jpeg_free_align(dynamic_img_data);
         dynamic_img_data = NULL;
+    }
+    // 释放摄像头帧缓冲区
+    if (current_camera_fb) {
+        bsp_camera_return_fb(current_camera_fb);
+        current_camera_fb = NULL;
+        ESP_LOGI(TAG, "摄像头帧缓冲区已释放");
+    }
+    // 释放摄像头显示缓冲区
+    if (camera_display_buf) {
+        free(camera_display_buf);
+        camera_display_buf = NULL;
+        ESP_LOGI(TAG, "摄像头显示缓冲区已释放");
     }
 }
 
@@ -592,7 +611,7 @@ static lv_image_dsc_t * create_image_from_sd_jpeg(const char * file_path)
 // 通用照片显示函数
 static void show_photo_overlay(const lv_image_dsc_t * photo_img)
 {
-    // 如果已经有照片显示，先关闭
+    // 如果已经有照片显示，先清理资源
     if (photo_overlay) {
         lv_obj_delete(photo_overlay);
         photo_overlay = NULL;
@@ -600,6 +619,15 @@ static void show_photo_overlay(const lv_image_dsc_t * photo_img)
     if (photo_timer) {
         lv_timer_delete(photo_timer);
         photo_timer = NULL;
+    }
+    // 清理之前的动态图像数据（不包括摄像头帧缓冲区）
+    if (dynamic_img_dsc) {
+        free(dynamic_img_dsc);
+        dynamic_img_dsc = NULL;
+    }
+    if (dynamic_img_data) {
+        jpeg_free_align(dynamic_img_data);
+        dynamic_img_data = NULL;
     }
 
     // 创建覆盖层容器
@@ -623,54 +651,142 @@ static void show_photo_overlay(const lv_image_dsc_t * photo_img)
 
 void player_1(lv_event_t * e)
 {
-    printf("\n🎯 Player 1 触发 - 播放1-long动画\n");
+    // printf("\n🎯 Player 1 触发 - 播放1-long动画\n");
     
-    // 首先检查SD卡状态
-    if (!check_sd_card_status()) {
-        printf("❌ SD卡状态检查失败，使用默认图片\n");
-        printf("💡 建议检查:\n");
-        printf("   1. SD卡是否正确插入\n");
-        printf("   2. SD卡是否损坏\n");
-        printf("   3. SD卡格式是否为FAT32\n");
-        printf("   4. 重新插拔SD卡\n");
+    // // 首先检查SD卡状态
+    // if (!check_sd_card_status()) {
+    //     printf("❌ SD卡状态检查失败，使用默认图片\n");
+    //     printf("💡 建议检查:\n");
+    //     printf("   1. SD卡是否正确插入\n");
+    //     printf("   2. SD卡是否损坏\n");
+    //     printf("   3. SD卡格式是否为FAT32\n");
+    //     printf("   4. 重新插拔SD卡\n");
+    //     show_photo_overlay(&ui_img_1_png);
+    //     return;
+    // }
+    
+    // // 动画文件夹路径
+    // const char * animation_folder = "/sdcard/player/1-long/360jpg";
+    
+    // // 检查动画文件夹是否存在
+    // struct stat st;
+    // if (stat(animation_folder, &st) != 0 || !S_ISDIR(st.st_mode)) {
+    //     printf("❌ 动画文件夹不存在: %s\n", animation_folder);
+    //     printf("� 建议:\n");
+    //     printf("   1. 确保SD卡中存在 player/1-long/360jpg 文件夹\n");
+    //     printf("   2. 检查文件夹路径是否正确\n");
+    //     printf("   3. 确保文件夹中包含 Image1.jpg, Image2.jpg 等文件\n");
+    //     show_photo_overlay(&ui_img_1_png);
+    //     return;
+    // }
+    
+    // printf("✅ 找到动画文件夹: %s\n", animation_folder);
+    
+    // // 快速检查是否有图片文件
+    // char test_path[512];
+    // snprintf(test_path, sizeof(test_path), "%s/Image1.jpg", animation_folder);
+    
+    // if (!safe_file_exists(test_path)) {
+    //     printf("❌ 动画文件夹中没有找到 Image1.jpg\n");
+    //     printf("💡 建议:\n");
+    //     printf("   1. 确保图片文件命名为 Image1.jpg, Image2.jpg, ...\n");
+    //     printf("   2. 检查图片文件是否完整\n");
+    //     show_photo_overlay(&ui_img_1_png);
+    //     return;
+    // }
+    
+    // // 开始播放动画
+    // start_animation(animation_folder);
+    
+    // printf("✨ Player 1 动画启动完成\n\n");
+    printf("\n🎯 Player 1 触发 - 拍摄照片显示\n");
+    
+    // 获取摄像头帧缓冲区
+    camera_fb_t *pic = bsp_camera_get_fb();
+    if (pic == NULL) {
+        ESP_LOGE(TAG, "摄像头拍摄失败！");
+        printf("❌ 摄像头拍摄失败，使用默认图片\n");
         show_photo_overlay(&ui_img_1_png);
         return;
     }
-    
-    // 动画文件夹路径
-    const char * animation_folder = "/sdcard/player/1-long/360jpg";
-    
-    // 检查动画文件夹是否存在
-    struct stat st;
-    if (stat(animation_folder, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        printf("❌ 动画文件夹不存在: %s\n", animation_folder);
-        printf("� 建议:\n");
-        printf("   1. 确保SD卡中存在 player/1-long/360jpg 文件夹\n");
-        printf("   2. 检查文件夹路径是否正确\n");
-        printf("   3. 确保文件夹中包含 Image1.jpg, Image2.jpg 等文件\n");
+
+    ESP_LOGI(TAG, "拍摄成功! 图像大小: %zu bytes, 分辨率: %dx%d, 格式: %d", 
+             pic->len, pic->width, pic->height, pic->format);
+
+    // 创建LVGL图像描述符
+    lv_image_dsc_t *img_dsc = malloc(sizeof(lv_image_dsc_t));
+    if (!img_dsc) {
+        ESP_LOGE(TAG, "无法分配图像描述符内存");
+        bsp_camera_return_fb(pic);
         show_photo_overlay(&ui_img_1_png);
         return;
     }
+
+    // 根据摄像头输出格式设置LVGL格式
+    lv_color_format_t lvgl_format;
+    uint8_t *display_buf = NULL;
+    size_t display_buf_size = 0;
     
-    printf("✅ 找到动画文件夹: %s\n", animation_folder);
-    
-    // 快速检查是否有图片文件
-    char test_path[512];
-    snprintf(test_path, sizeof(test_path), "%s/Image1.jpg", animation_folder);
-    
-    if (!safe_file_exists(test_path)) {
-        printf("❌ 动画文件夹中没有找到 Image1.jpg\n");
-        printf("💡 建议:\n");
-        printf("   1. 确保图片文件命名为 Image1.jpg, Image2.jpg, ...\n");
-        printf("   2. 检查图片文件是否完整\n");
+    if (pic->format == PIXFORMAT_RGB565) {
+        lvgl_format = LV_COLOR_FORMAT_RGB565;
+        display_buf_size = pic->len;
+        
+        // 由于LCD配置中有swap_bytes=true，我们需要交换RGB565的字节序
+        display_buf = malloc(display_buf_size);
+        if (!display_buf) {
+            ESP_LOGE(TAG, "无法分配RGB565字节序交换缓冲区内存");
+            free(img_dsc);
+            bsp_camera_return_fb(pic);
+            show_photo_overlay(&ui_img_1_png);
+            return;
+        }
+        
+        // 执行RGB565字节序交换
+        uint16_t *src = (uint16_t *)pic->buf;
+        uint16_t *dst = (uint16_t *)display_buf;
+        size_t pixel_count = pic->len / 2;
+        
+        for (size_t i = 0; i < pixel_count; i++) {
+            // 交换高低字节：0xABCD -> 0xCDAB
+            uint16_t pixel = src[i];
+            dst[i] = (pixel << 8) | (pixel >> 8);
+        }
+        
+        // 保存显示缓冲区引用以便后续释放
+        camera_display_buf = display_buf;
+        ESP_LOGI(TAG, "RGB565字节序交换完成");
+    } else if (pic->format == PIXFORMAT_RGB888) {
+        lvgl_format = LV_COLOR_FORMAT_RGB888;
+        display_buf = pic->buf;
+        display_buf_size = pic->len;
+    } else {
+        ESP_LOGW(TAG, "不支持的摄像头格式: %d，使用默认图片", pic->format);
+        free(img_dsc);
+        bsp_camera_return_fb(pic);
         show_photo_overlay(&ui_img_1_png);
         return;
     }
+
+    // 设置图像描述符
+    img_dsc->header.magic = LV_IMAGE_HEADER_MAGIC;
+    img_dsc->header.cf = lvgl_format;
+    img_dsc->header.flags = 0;
+    img_dsc->header.w = pic->width;
+    img_dsc->header.h = pic->height;
+    img_dsc->header.stride = (lvgl_format == LV_COLOR_FORMAT_RGB565) ? 
+                              pic->width * 2 : pic->width * 3;
+    img_dsc->header.reserved_2 = 0;
+    img_dsc->data_size = display_buf_size;
+    img_dsc->data = display_buf;
+    img_dsc->reserved = NULL;
+
+    // 显示摄像头图像
+    show_photo_overlay(img_dsc);
     
-    // 开始播放动画
-    start_animation(animation_folder);
+    // 保存摄像头帧缓冲区引用，在定时器回调中释放
+    current_camera_fb = pic;
     
-    printf("✨ Player 1 动画启动完成\n\n");
+    printf("✅ 摄像头图像显示完成\n");
 }
 
 void player_2(lv_event_t * e)

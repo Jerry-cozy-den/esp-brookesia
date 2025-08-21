@@ -18,3 +18,7 @@ dependencies:
   espressif/esp_lvgl_port:
     override_path: "../espressif__esp_lvgl_port"
     public: true
+  # ESP32 Camera component for image/video capture
+  espressif/esp32-camera: 
+    version: "^2.0.11"
+    public: true
