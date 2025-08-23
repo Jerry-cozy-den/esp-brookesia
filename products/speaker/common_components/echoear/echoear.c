@@ -89,7 +89,7 @@ esp_err_t bsp_i2c_init(void)
     const i2c_master_bus_config_t i2c_config = {
         .i2c_port = BSP_I2C_NUM,           // I2C端口号
         .sda_io_num = BSP_I2C_SDA,         // SDA数据线GPIO
-        .scl_io_num = BSP_I2C_SCL,
+        .scl_io_num = BSP_I2C_SCL,         // SCL时钟线GPIO  
         .clk_source = I2C_CLK_SRC_DEFAULT, // 使用默认时钟源
     };
     BSP_ERROR_CHECK_RETURN_ERR(i2c_new_master_bus(&i2c_config, &i2c_handle));
@@ -1089,12 +1089,12 @@ esp_err_t bsp_camera_init(void)
     config.pin_pwdn = CAMERA_PIN_PWDN;
     config.pin_reset = CAMERA_PIN_RESET;
     config.xclk_freq_hz = XCLK_FREQ_HZ;
-    config.pixel_format = PIXFORMAT_RGB565;     // 回到RGB565格式，通过字节序交换解决颜色问题
-    config.frame_size = FRAMESIZE_CIF;      // 352x288，接近LCD分辨率 360x360
+    config.pixel_format = PIXFORMAT_RGB565;
+    config.frame_size = FRAMESIZE_QVGA;      // 使用较小的分辨率先测试 (320x240)
     config.jpeg_quality = 12;
-    config.fb_count = 1;                    // 使用单个帧缓冲，确保最新图像
+    config.fb_count = 1;
     config.fb_location = CAMERA_FB_IN_PSRAM;
-    config.grab_mode = CAMERA_GRAB_LATEST;  // 确保总是获取最新帧
+    config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
 
     ESP_LOGI(TAG, "Camera config: SIOD=%d, SIOC=%d, I2C_port=%d", 
              config.pin_sccb_sda, config.pin_sccb_scl, config.sccb_i2c_port);
@@ -1146,35 +1146,6 @@ camera_fb_t* bsp_camera_get_fb(void)
 }
 
 /**
- * @brief 获取摄像头最新帧缓冲
- * 
- * 丢弃旧帧并获取最新的图像数据，确保拍摄到的是当前时刻的图像。
- * 
- * @return 摄像头帧缓冲指针，失败时返回NULL
- */
-camera_fb_t* bsp_camera_get_fresh_fb(void)
-{
-    camera_fb_t* fb = NULL;
-    
-    // 丢弃可能存在的旧帧，最多尝试3次以确保获取最新帧
-    for (int i = 0; i < 3; i++) {
-        fb = esp_camera_fb_get();
-        if (fb == NULL) {
-            break;
-        }
-        
-        if (i < 2) {
-            // 前两次获取的帧直接丢弃
-            esp_camera_fb_return(fb);
-            fb = NULL;
-            vTaskDelay(pdMS_TO_TICKS(30)); // 等待30ms让摄像头捕获新帧
-        }
-    }
-    
-    return fb; // 返回最后一次获取的帧（最新的）
-}
-
-/**
  * @brief 返回摄像头帧缓冲
  * 
  * 将帧缓冲返回给摄像头驱动以便复用。
@@ -1185,64 +1156,5 @@ void bsp_camera_return_fb(camera_fb_t* fb)
 {
     if (fb != NULL) {
         esp_camera_fb_return(fb);
-    }
-}
-
-/**
- * @brief 按需拍照（初始化->拍照->反初始化）
- * 
- * 每次拍照时重新初始化摄像头，确保获取最新的图像，避免旧帧问题。
- * 拍照完成后自动反初始化摄像头以释放资源。
- * 
- * @return 摄像头帧缓冲指针，使用完毕后需要调用bsp_camera_finish_picture()释放。失败时返回NULL
- */
-camera_fb_t* bsp_camera_take_picture(void)
-{
-    ESP_LOGI(TAG, "Taking picture with on-demand camera initialization...");
-    
-    /* 初始化摄像头 */
-    esp_err_t err = bsp_camera_init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize camera for picture taking: 0x%x", err);
-        return NULL;
-    }
-    
-    /* 等待摄像头稳定 */
-    vTaskDelay(pdMS_TO_TICKS(500));
-    
-    /* 获取最新帧 */
-    camera_fb_t* fb = bsp_camera_get_fresh_fb();
-    if (fb == NULL) {
-        ESP_LOGE(TAG, "Failed to get camera frame buffer");
-        bsp_camera_deinit(); // 出错时也要反初始化
-        return NULL;
-    }
-    
-    ESP_LOGI(TAG, "Picture taken successfully: %dx%d, size=%zu bytes", 
-             fb->width, fb->height, fb->len);
-    
-    return fb;
-}
-
-/**
- * @brief 完成拍照后的清理工作
- * 
- * 释放帧缓冲并反初始化摄像头。
- * 应该在使用完bsp_camera_take_picture()返回的帧缓冲后调用。
- * 
- * @param fb 要释放的帧缓冲指针
- */
-void bsp_camera_finish_picture(camera_fb_t* fb)
-{
-    if (fb != NULL) {
-        bsp_camera_return_fb(fb);
-    }
-    
-    /* 反初始化摄像头以释放资源 */
-    esp_err_t err = bsp_camera_deinit();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to deinitialize camera after picture: 0x%x", err);
-    } else {
-        ESP_LOGI(TAG, "Camera cleanup completed");
     }
 }

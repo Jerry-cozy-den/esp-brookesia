@@ -38,7 +38,6 @@ static lv_timer_t * photo_timer = NULL;
 static lv_image_dsc_t * dynamic_img_dsc = NULL;
 static uint8_t * dynamic_img_data = NULL;
 static camera_fb_t * current_camera_fb = NULL;  // 新增：当前摄像头帧缓冲区
-static uint8_t * camera_display_buf = NULL;  // 新增：摄像头显示缓冲区（用于格式转换）
 
 // 动画播放相关全局变量
 static lv_timer_t * animation_timer = NULL;
@@ -79,12 +78,6 @@ static void photo_timer_cb(lv_timer_t * timer)
         bsp_camera_return_fb(current_camera_fb);
         current_camera_fb = NULL;
         ESP_LOGI(TAG, "摄像头帧缓冲区已释放");
-    }
-    // 释放摄像头显示缓冲区
-    if (camera_display_buf) {
-        free(camera_display_buf);
-        camera_display_buf = NULL;
-        ESP_LOGI(TAG, "摄像头显示缓冲区已释放");
     }
 }
 
@@ -724,41 +717,10 @@ void player_1(lv_event_t * e)
 
     // 根据摄像头输出格式设置LVGL格式
     lv_color_format_t lvgl_format;
-    uint8_t *display_buf = NULL;
-    size_t display_buf_size = 0;
-    
     if (pic->format == PIXFORMAT_RGB565) {
         lvgl_format = LV_COLOR_FORMAT_RGB565;
-        display_buf_size = pic->len;
-        
-        // 由于LCD配置中有swap_bytes=true，我们需要交换RGB565的字节序
-        display_buf = malloc(display_buf_size);
-        if (!display_buf) {
-            ESP_LOGE(TAG, "无法分配RGB565字节序交换缓冲区内存");
-            free(img_dsc);
-            bsp_camera_return_fb(pic);
-            show_photo_overlay(&ui_img_1_png);
-            return;
-        }
-        
-        // 执行RGB565字节序交换
-        uint16_t *src = (uint16_t *)pic->buf;
-        uint16_t *dst = (uint16_t *)display_buf;
-        size_t pixel_count = pic->len / 2;
-        
-        for (size_t i = 0; i < pixel_count; i++) {
-            // 交换高低字节：0xABCD -> 0xCDAB
-            uint16_t pixel = src[i];
-            dst[i] = (pixel << 8) | (pixel >> 8);
-        }
-        
-        // 保存显示缓冲区引用以便后续释放
-        camera_display_buf = display_buf;
-        ESP_LOGI(TAG, "RGB565字节序交换完成");
     } else if (pic->format == PIXFORMAT_RGB888) {
         lvgl_format = LV_COLOR_FORMAT_RGB888;
-        display_buf = pic->buf;
-        display_buf_size = pic->len;
     } else {
         ESP_LOGW(TAG, "不支持的摄像头格式: %d，使用默认图片", pic->format);
         free(img_dsc);
@@ -776,12 +738,12 @@ void player_1(lv_event_t * e)
     img_dsc->header.stride = (lvgl_format == LV_COLOR_FORMAT_RGB565) ? 
                               pic->width * 2 : pic->width * 3;
     img_dsc->header.reserved_2 = 0;
-    img_dsc->data_size = display_buf_size;
-    img_dsc->data = display_buf;
+    img_dsc->data_size = pic->len;
+    img_dsc->data = pic->buf;
     img_dsc->reserved = NULL;
 
     // 显示摄像头图像
-    show_photo_overlay(img_dsc);
+    show_photo_overlay(                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            );
     
     // 保存摄像头帧缓冲区引用，在定时器回调中释放
     current_camera_fb = pic;
@@ -913,3 +875,4 @@ void player_module_cleanup(void)
     
     printf("✅ 播放器模块清理完成\n");
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 

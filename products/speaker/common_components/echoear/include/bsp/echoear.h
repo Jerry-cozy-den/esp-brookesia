@@ -522,15 +522,6 @@ extern "C"
     camera_fb_t* bsp_camera_get_fb(void);
 
     /**
-     * @brief 获取摄像头最新帧缓冲
-     *
-     * 丢弃旧帧并获取最新的图像数据，确保拍摄到的是当前时刻的图像。
-     *
-     * @return 摄像头帧缓冲指针，失败时返回NULL
-     */
-    camera_fb_t* bsp_camera_get_fresh_fb(void);
-
-    /**
      * @brief 返回摄像头帧缓冲
      *
      * 将帧缓冲返回给摄像头驱动以便复用。
@@ -538,26 +529,6 @@ extern "C"
      * @param fb 要返回的帧缓冲指针
      */
     void bsp_camera_return_fb(camera_fb_t* fb);
-
-    /**
-     * @brief 按需拍照（初始化->拍照->反初始化）
-     *
-     * 每次拍照时重新初始化摄像头，确保获取最新的图像，避免旧帧问题。
-     * 拍照完成后需要调用bsp_camera_finish_picture()进行清理。
-     *
-     * @return 摄像头帧缓冲指针，失败时返回NULL
-     */
-    camera_fb_t* bsp_camera_take_picture(void);
-
-    /**
-     * @brief 完成拍照后的清理工作
-     *
-     * 释放帧缓冲并反初始化摄像头。
-     * 应该在使用完bsp_camera_take_picture()返回的帧缓冲后调用。
-     *
-     * @param fb 要释放的帧缓冲指针
-     */
-    void bsp_camera_finish_picture(camera_fb_t* fb);
 
 #ifdef __cplusplus
 }
